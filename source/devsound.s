@@ -62,7 +62,7 @@
     .equ    REG_SOUNDCNT_X, 0x04000084 @ NR52
     .equ    REG_SOUNDBIAS,  0x04000088 @ Sound bias + amplitude resolution
     
-    .equ    REG_WAVE_RAM,   0x04000090 @ DMG wave RAM bank
+    .equ    REG_WAVE_RAM,   0x04000090 @ DMG wave RAM
     
     .equ    REG_FIFO_A_L,   0x040000A0 @ FIFO A
     .equ    REG_FIFO_A_H,   0x040000A2
@@ -350,13 +350,13 @@
     
     .global sfix
     .macro sfix length
-    note C_,2,\length
+    note nC_,2,\length
     .endm
     
     .global sfixins
     .macro sfixins ptr,length
     sound_instrument \ptr
-    note C_,2,\length
+    note nC_,2,\length
     .endm
 
     
@@ -383,15 +383,7 @@ DS_Init:
     ldr     r4,=(DMG_VOL_LR_77 + DMG_LR) + ((SCNT_DMG_VOL100 + SCNT_DS_VOL100 + SCNT_DS_LR + SCNT_DS_TIMR0) << 16)
     str     r4,[r5]
 
-    @ clear memory
-    ldr     r0,=DS_RAMStart
-    ldr     r1,=DS_RAMEnd
-    mov     r2,0
-.clearloop:
-    str     r2,[r0]
-    add     r0,4
-    cmp     r0,r1
-    blt     .clearloop
+    bl      DS_ClearMem
     
     @ init ch3 wave
     mov     r0,0
@@ -418,72 +410,178 @@ DS_Init:
 
     .global DS_LoadSong
     .type DS_LoadSong STT_FUNC
-@ INPUT: song ID in r0
+@ INPUT:    song ID in r0
+@ OUTPUT:   none
+@ DESTROYS: none
 DS_LoadSong:
-    brk
-    push    {r0-r12, lr}
+    push    {r0-r4,lr}
+    bl      DS_ClearMem
     ldr     r1,=DS_SongPointers
     mov     r2,4
     mul     r0,r2
-    ldr     r0,[r1,r0]
+    ldr     r1,[r1,r0]
     @ pointer to song header is now in r0
-    ldr     r1,=DS_CH1_SeqPtr
-    mov     r4,12
-1:  ldr     r3,[r0]
-    str     r3,[r1]
-    add     r0,4
+    @ get song mode
+    ldrh    r0,[r1]
+    ldr     r2,=DS_Mode
+    strh    r0,[r2]
+    add     r1,2
+    @ get song speed
+    ldrh    r0,[r1]
+    ldr     r2,=DS_MusicSpeed
+    strh    r0,[r2]
+    add     r1,2
+    @ get sequence pointers
+    ldr     r2,=DS_CH1_SeqPtr
+    mov     r3,12
+1:  ldr     r0,[r1]
+    str     r0,[r2]
     add     r1,4
-    sub     r4,1
-    cmp     r4,0
+    add     r2,4
+    sub     r3,1
+    cmp     r3,0
     bne     1b
-    mov     r0,1
+    @ set music flags
     ldr     r1,=DS_MusicPlaying
+    mov     r0,1
+    strh    r0,[r1]
+    ldr     r1,=DS_MusicSpeedTick
     strh    r0,[r1]
     ldr     r1,=DS_MusicFlags
-    ldr     r0,=0b111111111111
+    ldr     r0,=0b1111111100111111
     strh    r0,[r1]
-    
-    pop     {r0-r12, lr}
+    pop     {r0-r4,lr}
     bx      lr
 
 @ =============================================================================
 
+@ INPUT:    none
+@ OUTPUT:   none
+@ DESTROYS: none
     .global DS_Stop
     .type   DS_Stop STT_FUNC
+    .arm
 DS_Stop:
-    brk
-    push    {r0-r12, lr}
-    
-    pop     {r0-r12, lr}
+    push    {r0,r1,lr}
+    mov     r0,0
+    ldr     r1,=DS_MusicPlaying
+    strh    r0,[r1]
+    ldr     r1,=REG_SOUNDCNT_X
+    strh    r0,[r1]
+    pop     {r0,r1,lr}
     bx      lr
 
 @ =============================================================================
 
+@ INPUT:    none
+@ OUTPUT:   none
+@ OUTPUT:   none
     .global DS_Update
-    .type   DS_Update STT_FUNC
-    
+    .type   DS_Update STT_FUNC    
     .thumb
 DS_Update:
     push    {r0-r7,lr}
-
-    
-    
+    ldr     r1,=DS_MusicPlaying
+    ldrh    r0,[r1]
+    cmp     r0,0
+    beq     DS_NoUpdate
+    bl      DS_UpdateMusic
+    bl      DS_UpdateEffects
+    bl      DS_UpdateTables
+    bl      DS_UpdateRegisters
+DS_NoUpdate:
     pop     {r0-r7,pc}
 
+DS_UpdateMusic:
+    push    {lr}
+    ldr     r1,=DS_MusicPlaying
+    ldrh    r0,[r1]
+    cmp     r0,0
+    bne     1f
+    pop     {pc}
+1:  ldr     r1,=DS_GlobalTick
+    ldrh    r0,[r1]
+    adds    r0,1
+    strh    r0,[r1]
+    
+    ldr     r1,=DS_MusicSpeedTick
+    ldrh    r0,[r1]
+    subs    r0,1
+    strh    r0,[r1]
+    cmp     r0,0
+    beq     2f
+    pop     {pc}
+
+2:  ldr     r1,=DS_MusicTick
+    ldrh    r0,[r1]
+    adds    r0,1
+    strh    r0,[r1]
+    ldr     r1,=DS_MusicSpeed
+    movs    r2,1
+    ands    r0,r2
+    cmp     r0,0
+    bne     3f
+    adds    r1,1
+3:  ldrb    r0,[r1]
+    ldr     r1,=DS_MusicSpeedTick
+    strh    r0,[r1]
+    
+    @ TODO: Channel update routines
+    
+    pop     {pc}
+
+DS_UpdateEffects:
+    push    {lr}
+    
+    pop     {pc}
+
+DS_UpdateTables:
+    push    {lr}
+    
+    pop     {pc}
+
+DS_UpdateRegisters:
+    push    {lr}
+    
+    pop     {pc}
+    
+  
 @ =============================================================================
 @ Utility routines
 @ =============================================================================
 
-@ INPUT: note number in r2
-@ OUTPUT: r7 = frequency
+@ Clear DevSound's memory.
+@ INPUT:    none
+@ OUTPUT:   none
+@ DESTROYS: r0, r1, r2
+    .align  4
+    .arm
+DS_ClearMem:
+    push    {r0-r2}
+    ldr     r0,=DS_RAMStart
+    ldr     r1,=DS_RAMEnd
+    mov     r2,0
+.clearloop:
+    str     r2,[r0]
+    add     r0,4
+    cmp     r0,r1
+    blt     .clearloop
+    pop     {r0-r2}
+    bx      lr
+
+    .thumb
+@ INPUT:    r2 = note number
+@ OUTPUT:   r7 = frequency
+@ DESTROYS: r0, r7
 DS_GetNoteFrequencyDMG:
-    push    {lr}
     ldr     r0,=DS_FreqTable
     adds    r0,r2
     ldrh    r7,[r0]
-    pop     {pc}
+    bx      lr
 
-@ INPUT: wave pointer in r2
+@ INPUT:    r2 = wave pointer
+@ OUTPUT:   none
+@ DESTROYS: none
 DS_LoadWave:
     push    {r0-r4,lr}
     movs    r0,0
@@ -505,22 +603,19 @@ DS_LoadWave:
 
 @ =============================================================================
 
-    .section .text
-    .align 4
+    .align 4 @ alignment needed for wave copy routine
 DS_DefaultWave:
 DS_Waves:
     .byte   0x8A,0xCD,0xEE,0xFF,0xFF,0xEE,0xCD,0xA8,0x75,0x32,0x11,0x00,0x00,0x11,0x23,0x57 @ sine
     .byte   0xFF,0xFF,0xFF,0xFF,0xFF,0xF0,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ bass
-    
-@    .byte   0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF @ sawtooth
-@    .byte   0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF,0xFE,0xDC,0xBA,0x98,0x76,0x54,0x32,0x10 @ triangle
-@    .byte   0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 50% pulse (square)
-@    .byte   0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 37.5% pulse
-@    .byte   0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 25% pulse
-@    .byte   0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 12.5% pulse
-@    .byte   0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 6.25% pulse (SN7 noise)
+    .byte   0x00,0x11,0x22,0x33,0x44,0x55,0x66,0x77,0x88,0x99,0xAA,0xBB,0xCC,0xDD,0xEE,0xFF @ sawtooth
+    .byte   0x01,0x23,0x45,0x67,0x89,0xAB,0xCD,0xEF,0xFE,0xDC,0xBA,0x98,0x76,0x54,0x32,0x10 @ triangle
+    .byte   0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 50% pulse (square)
+    .byte   0xFF,0xFF,0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 37.5% pulse
+    .byte   0xFF,0xFF,0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 25% pulse
+    .byte   0xFF,0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 12.5% pulse
+    .byte   0xFF,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00 @ 6.25% pulse (SN7 noise)
 
-    .global DS_FreqTable
 DS_FreqTable:
     .hword  0x02c,0x09d,0x107,0x16b,0x1c9,0x223,0x277,0x2c7,0x312,0x358,0x39b,0x3da @ octave 1
     .hword  0x416,0x44e,0x483,0x4b5,0x4e5,0x511,0x53b,0x563,0x589,0x5ac,0x5ce,0x5ed @ octave 2
@@ -530,6 +625,29 @@ DS_FreqTable:
     .hword  0x7c1,0x7c5,0x7c8,0x7cb,0x7ce,0x7d1,0x7d4,0x7d6,0x7d9,0x7db,0x7dd,0x7df @ octave 6
     .hword  0x7e1,0x7e2,0x7e4,0x7e6,0x7e7,0x7e9,0x7ea,0x7eb,0x7ec,0x7ed,0x7ee,0x7ef @ octave 7
     .hword  0x7f0,0x7f1,0x7f2,0x7f3,0x7f4,0x7f4,0x7f5,0x7f6,0x7f6,0x7f7,0x7f7,0x7f8 @ octave 8
+
+DSX_NoiseTable:
+    .byte   0xA4
+    .byte   0x97,0x96,0x95,0x94
+    .byte   0x87,0x86,0x85,0x84
+    .byte   0x77,0x76,0x75,0x74
+    .byte   0x67,0x66,0x65,0x64
+    .byte   0x57,0x56,0x55,0x54
+    .byte   0x47,0x46,0x45,0x44
+    .byte   0x37,0x36,0x35,0x34
+    .byte   0x27,0x26,0x25,0x24
+    .byte   0x17,0x16,0x15,0x14
+    .byte   0x07,0x06,0x05,0x04
+    .byte   0x03,0x02,0x01,0x00
+
+    .pool   @ ugh
+
+@ =============================================================================
+    
+    .align  4
+DS_SongPointers:
+    .word   DS_TestSong
+    .word   Mus_Techno
 
 @ =============================================================================
 
@@ -563,6 +681,8 @@ Vib_Test:
     
     .align  4
 DS_TestSong:
+    .hword  0
+    .byte   4,8
     .word   DS_Test_CH1
     .word   DS_DummyChannel
     .word   DS_DummyChannel
@@ -575,7 +695,6 @@ DS_TestSong:
     .word   DS_DummyChannel
     .word   DS_DummyChannel
     .word   DS_DummyChannel
-    .byte   4,4
 
 DS_Test_CH1:
     sound_instrument    TestInstrument
@@ -589,14 +708,7 @@ DS_Test_CH1:
     note    nC_,4,4
     sound_end
 
-@ =============================================================================
-    
-    .align  4
-DS_SongPointers:
-    .word   DS_TestSong
-@    .word   Mus_Techno
-    
-    .asciz  "END"
+    .include "../source/music/techno.s"
 
 @ =============================================================================
 @ Memory defines
@@ -609,13 +721,16 @@ DS_RAMStart:
 
 .align 2
 DS_MusicPlaying:        .hword  0   @ 0 = music not playing, 1 = music playing
-DS_MusicFlags:          .hword  0   @ ................ MMMMMMMM..BA4321
+DS_GlobalTick:          .hword  0
+DS_MusicFlags:          .hword  0   @  MMMMMMMM..BA4321
                                     @ 1, 2, 3, 4 = DMG channels
                                     @ A, B = Direct DMA channels
                                     @ M = MinMod channels
-DS_MusicSpeed:          .hword  0   @ ...............2 ..............1
+DS_MusicSpeed:          .hword  0   @ .......2 ......1
                                     @ lower half = first speed, upper half = second speed
+DS_Mode:                .hword  0   @ (0 = DMG only, 1 = DMG + direct DMA, 2 = DMG + MinMod)
 DS_MusicTick:           .hword  0
+DS_MusicSpeedTick:      .hword  0
 DS_MusicTimer:          .hword  0
 DS_StereoFlags:         .hword  0
 DS_GlobalTranspose:     .hword  0

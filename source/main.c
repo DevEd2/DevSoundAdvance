@@ -4,8 +4,6 @@
 #include <tonc.h>
 #include "devsound.h"
 
-
-
 int main()
 {
 	int frame=0;
@@ -15,7 +13,7 @@ int main()
     irq_add(II_VBLANK, NULL);
     
 	DS_Init();
-    DS_LoadSong(0);
+    DS_LoadSong(MUS_TEST);
 	
 	REG_DISPCNT = DCNT_MODE0 | DCNT_BG0;
 	
@@ -23,7 +21,6 @@ int main()
 	
 	tte_write("\nDevSound Advance Demo\nby DevEd\n");
     // TODO: Visualizer?
-	
 	
 	while(1)
 	{

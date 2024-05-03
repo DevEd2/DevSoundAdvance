@@ -1,9 +1,8 @@
-    .section .data
-    .ascii  "START"    
     
     .align  4
-    .global Mus_Techno
 Mus_Techno:
+    .hword  0   @ mode 0 - DMG only
+    .byte   7,7 @ song speed 7/7
     .word Mus_Techno_CH1
     .word Mus_Techno_CH2
     .word Mus_Techno_CH3
@@ -15,7 +14,6 @@ Mus_Techno:
     .word DS_DummyChannel
     .word DS_DummyChannel
     .word DS_DummyChannel
-    .byte 7,7
     .word DS_DummyChannel
 
 @ ----------------
@@ -226,7 +224,7 @@ Mus_Techno_CH1:
     sound_instrument Ins_PulseEcho2
     rest 128
 0:
-    sound_call .block1
+    sound_call 3f
     sound_loop 9,0b
 1:
     sound_call 3f
@@ -399,7 +397,7 @@ Mus_Techno_CH3:
     sound_loop 3,9b
     sound_reset_transpose
 10:
-    sound_call .13f
+    sound_call 13f
     sound_loop 3,10b
     sound_transpose 2
 11:
@@ -543,4 +541,3 @@ Mus_Techno_CH4:
     sfix 1
     sfixins Ins_Snare,1
     sound_ret
-    .ascii "END"
