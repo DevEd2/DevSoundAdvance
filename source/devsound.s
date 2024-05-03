@@ -682,7 +682,7 @@ Vib_Test:
     .align  4
 DS_TestSong:
     .hword  0
-    .byte   4,8
+    .byte   6,6
     .word   DS_Test_CH1
     .word   DS_DummyChannel
     .word   DS_DummyChannel
