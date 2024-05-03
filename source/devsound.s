@@ -687,6 +687,7 @@ DS_TestSong:
     .word   DS_DummyChannel
     .word   DS_DummyChannel
     .word   DS_DummyChannel
+    
     .word   DS_DummyChannel
     .word   DS_DummyChannel
     .word   DS_DummyChannel
