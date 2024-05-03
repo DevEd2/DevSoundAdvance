@@ -544,7 +544,32 @@ DS_UpdateRegisters:
     push    {lr}
     
     pop     {pc}
+
+DS_UpdateCH1:
+    push    {lr}
+    pop     {pc}
+
+DS_UpdateCH2:
+    push    {lr}
+    pop     {pc}
+
+DS_UpdateCH3:
+    push    {lr}
+    pop     {pc}
     
+DS_UpdateCH4:
+    push    {lr}
+    pop     {pc}
+    
+@ INPUT:    r7 = channel ID
+DS_UpdateChannelDDMA:
+    push    {lr}
+    pop     {pc}
+
+@ INPUT:    r7 = channel ID
+DS_UpdateChannelMM:
+    push    {lr}
+    pop     {pc}
   
 @ =============================================================================
 @ Utility routines
