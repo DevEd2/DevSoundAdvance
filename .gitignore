@@ -43,6 +43,6 @@
 *.pdb
 
 # GBA-specific stuff
-.gba
-.sav
+*.gba
+*.sav
 
