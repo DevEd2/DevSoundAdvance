@@ -151,10 +151,10 @@
 @ Useful macros
 @ =============================================================================
 
-    .global brk
     .macro brk
     mov     r11,r11
     .endm
+
 @ =============================================================================
 @ Sound command definitions
 @ =============================================================================
@@ -166,6 +166,7 @@
     
     .equ    PITCH_BIT_MONTY,        7
     .equ    PITCH_MODE_MASK,        0b00001111
+    .equ    PITCH_BIT_MASK,         0b11110000
 
     .global nC_
     .global nCs
@@ -570,7 +571,6 @@ DS_UpdateRegisters:
     pop     {pc}
 
 DS_UpdateCH1:
-    brk
     push    {lr}
     ldr     r1,=DS_MusicFlags
     ldrb    r0,[r1]
@@ -770,9 +770,50 @@ DS_CH1_CMD_SetInstrument:
     ldr     r7,=0xFFFFFFFC
     ands    r1,r7
     @ read word
-    ldr     r0,[r1]
+    ldr     r2,[r1]
     adds    r1,4
-    @ TODO
+    
+    ldr     r3,=DS_CH1_VolPtr
+    ldr     r4,=DS_CH1_VolResetPtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    str     r0,[r4]
+    ldr     r3,=DS_CH1_ArpPtr
+    ldr     r4,=DS_CH1_ArpResetPtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    str     r0,[r4]
+    ldr     r3,=DS_CH1_PulsePtr
+    ldr     r4,=DS_CH1_PulseResetPtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    str     r0,[r4]
+    ldr     r3,=DS_CH1_PitchPtr
+    ldr     r4,=DS_CH1_PitchResetPtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    str     r0,[r4]
+    
+    ldr     r3,=DS_CH1_VolReleasePtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    ldr     r3,=DS_CH1_ArpReleasePtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    ldr     r3,=DS_CH1_PulseReleasePtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
+    ldr     r3,=DS_CH1_PitchReleasePtr
+    ldr     r0,[r2]
+    adds    r2,4
+    str     r0,[r3]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Jump:
@@ -815,49 +856,91 @@ DS_CH1_CMD_Return:
 DS_CH1_CMD_SlideUp:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_SlideSpeed
+    ldrb    r0,[r2]
+    ldr     r2,=DS_CH1_PitchMode
+    ldrb    r0,[r2]
+    movs    r3,PITCH_BIT_MASK
+    ands    r0,r3
+    adds    r0,PITCH_MODE_SLIDE_UP
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SlideDown:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_SlideSpeed
+    ldrb    r0,[r2]
+    ldr     r2,=DS_CH1_PitchMode
+    ldrb    r0,[r2]
+    movs    r3,PITCH_BIT_MASK
+    ands    r0,r3
+    adds    r0,PITCH_MODE_SLIDE_UP
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Portamento:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_SlideSpeed
+    ldrb    r0,[r2]
+    ldr     r2,=DS_CH1_PitchMode
+    ldrb    r0,[r2]
+    movs    r3,PITCH_BIT_MASK
+    ands    r0,r3
+    adds    r0,PITCH_MODE_PORTAMENTO
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_ToggleMonty:
-    @ TODO
+    ldr     r2,=DS_CH1_PitchMode
+    ldrb    r0,[r2]
+    movs    r3,1 << PITCH_BIT_MONTY
+    eors    r0,r3
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetVol:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_ChannelVol
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetTranspose:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_Transpose
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetTransposeGlobal:
     ldrb    r0,[r1]
     adds    r1,1
-    @ TODO
+    ldr     r2,=DS_CH1_Transpose
+    ldr     r3,=DS_CH2_Transpose
+    ldr     r4,=DS_CH3_Transpose
+    strb    r0,[r2]
+    strb    r0,[r3]
+    strb    r0,[r4]
+    @ TODO: direct dma/directsound channels
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_ResetTranspose:
-    @ TODO
+    movs    r0,0
+    ldr     r2,=DS_CH1_Transpose
+    strb    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_ResetTransposeGlobal:
-    @ TODO
+    movs    r0,0
+    ldr     r2,=DS_CH1_Transpose
+    ldr     r3,=DS_CH2_Transpose
+    ldr     r4,=DS_CH3_Transpose
+    strb    r0,[r2]
+    strb    r0,[r3]
+    strb    r0,[r4]
+    @ TODO: direct dma/directsound channels
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetArpPtr:
@@ -946,9 +1029,11 @@ DS_ClearMem:
     .thumb
 @ INPUT:    r0 = note number
 @ OUTPUT:   r7 = frequency
-@ DESTROYS: r0, r7
+@ DESTROYS: r0, r2, r3, r7
 DS_GetNoteFrequencyDMG:
     ldr     r2,=DS_FreqTable
+    movs    r3,2
+    muls    r0,r3
     adds    r2,r0
     ldrh    r7,[r2]
     bx      lr
