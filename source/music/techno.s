@@ -1,5 +1,5 @@
     
-    .align  4
+    .align  2
 Mus_Techno:
     .hword  0   @ mode 0 - DMG only
     .byte   7,7 @ song speed 7/7
@@ -143,18 +143,22 @@ Arp_CymbR:
 Arp_1_037:
     .byte 0,3,7
     .byte seq_loop
+    .align  2
     .word Arp_1_037
 Arp_1_047:
     .byte 0,4,7
     .byte seq_loop
+    .align  2
     .word Arp_1_047
 Arp_1_038:
     .byte 0,3,8
     .byte seq_loop
+    .align  2
     .word Arp_1_038
 Arp_BigArp:
     .byte 0,seq_wait,3,2,2,2,5,seq_wait,3,9,9,9,12,seq_wait,3,9,9,9,7,seq_wait,3,5,5,5
     .byte seq_loop
+    .align  2
     .word Arp_BigArp
 
 @ ----------------
@@ -168,6 +172,7 @@ Pulse_Lead1:
     .byte 1,seq_wait,11
     .byte 2,seq_wait,11
     .byte seq_loop
+    .align  2
     .word 1b 
 Wave_Bass2:
     .byte 1,seq_end
@@ -194,6 +199,7 @@ Pulse_Arp1:
     .byte 2,seq_wait,4
     .byte 3,seq_wait,4
     .byte seq_loop
+    .align  2
     .word Pulse_Arp1
 Pulse_BigArp:
     .byte 0,seq_wait,6
@@ -203,6 +209,7 @@ Pulse_BigArp:
     .byte 2,seq_wait,6
     .byte 1,seq_wait,6
     .byte seq_loop
+    .align  2
     .word Pulse_BigArp
  
 @ ----------------
@@ -211,11 +218,13 @@ Vib_Lead1:
     .byte 9
 1:  .byte 2,4,4,2,0,-2,-4,-4,-2,0
     .byte pitch_loop
+    .align  2
     .word 1b
 Vib_Lead2:
     .byte 11
 1:  .byte 2,4,6,4,2,0,-2,-4,-6,-4,-2,0
     .byte pitch_loop
+    .align  2
     .word 1b
 
 @ ================================================================
@@ -238,7 +247,7 @@ Mus_Techno_CH1:
 2:
     sound_call 3f
     sound_loop 3,2b
-    sound_jump .loop
+    sound_jump 0b
 
 3:
     note nC_,5,1
@@ -414,7 +423,7 @@ Mus_Techno_CH3:
     sound_call 16f
     sound_call 14f
     sound_loop 1,12b
-    sound_jump .loop
+    sound_jump 2b
     
 13:
     note nAs,3,1

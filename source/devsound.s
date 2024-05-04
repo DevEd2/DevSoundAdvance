@@ -230,6 +230,7 @@
     .global sound_instrument
     .macro sound_instrument ptr
     .byte 0x80
+    .align 2
     .word \ptr
     .endm
     
@@ -237,6 +238,7 @@
     .global sound_jump
     .macro sound_jump ptr
     .byte 0x81
+    .align 2
     .word \ptr
     .endm
     
@@ -245,6 +247,7 @@
     .macro sound_loop cnt,ptr
     .byte 0x82
     .byte \cnt
+    .align 2
     .word \ptr
     .endm
     
@@ -252,6 +255,7 @@
     .global sound_call
     .macro sound_call ptr
     .byte 0x83
+    .align 2
     .word \ptr
     .endm
     
@@ -294,6 +298,7 @@
     .macro sound_sample channel, ptr
     .byte 0x89
     .byte \channel
+    .align 2
     .word ptr
     .endm
     
@@ -339,6 +344,7 @@
     .global sound_set_arp_ptr
     .macro sound_set_arp_ptr ptr
     .byte 0x8f
+    .align 2
     .word \ptr
     .endm
     
@@ -346,6 +352,7 @@
     .global sound_set_speed
     .macro sound_set_speed spd1, spd2
     .byte 0x90
+    .align 2
     .byte \spd1
     .byte \spd2
     .endm
@@ -726,7 +733,6 @@ DS_CH1_Command:
 
     .pool   @ ugh x2
     
-    
 JumpTo_DS_CH1_DoneUpdating:
     b       DS_CH1_DoneUpdating
 JumpTo_DS_CH1_GetByte:
@@ -759,12 +765,22 @@ DS_CH1_CMD_Dummy:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetInstrument:
+    @ align r1 to next word
+    adds    r1,4
+    ldr     r7,=0xFFFFFFFC
+    ands    r1,r7
+    @ read word
     ldr     r0,[r1]
     adds    r1,4
     @ TODO
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Jump:
+    @ align r1 to next word
+    adds    r1,4
+    ldr     r7,=0xFFFFFFFC
+    ands    r1,r7
+    @ read word
     ldr     r1,[r1]
     b       DS_CH1_GetByte
 
@@ -845,6 +861,11 @@ DS_CH1_CMD_ResetTransposeGlobal:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetArpPtr:
+    @ align r1 to next word
+    adds    r1,4
+    ldr     r7,=0xFFFFFFFC
+    ands    r1,r7
+    @ read word
     ldr     r0,[r1]
     adds    r1,4
     @ TODO
@@ -852,6 +873,11 @@ DS_CH1_CMD_SetArpPtr:
 
 
 DS_CH1_CMD_SetSpeed:
+    @ align r1 to next word
+    adds    r1,2
+    ldr     r7,=0xFFFFFFFC
+    ands    r1,r7
+    @ read halfword
     ldrh    r0,[r1]
     adds    r1,1
     ldr     r2,=DS_MusicSpeed
@@ -951,7 +977,7 @@ DS_LoadWave:
 
 @ =============================================================================
 
-    .align 4 @ alignment needed for wave copy routine
+    .align 2 @ alignment needed for wave copy routine
 DS_DefaultWave:
 DS_Waves:
     .byte   0x8A,0xCD,0xEE,0xFF,0xFF,0xEE,0xCD,0xA8,0x75,0x32,0x11,0x00,0x00,0x11,0x23,0x57 @ sine
@@ -1004,6 +1030,7 @@ DS_DummyTable:
 DS_DummyChannel:
     sound_end
 
+    .align  2
 TestInstrument:
     .word   Vol_Test,Arp_Test,Pulse_Test,Vib_Test
     .word   0,0,0,0
@@ -1013,6 +1040,7 @@ Vol_Test:
 Arp_Test:
 1:  .byte   12,12,12,12,0,0,0,0
     .byte   seq_loop
+    .align  2
     .word   1b
 Pulse_Test:
 1:  .byte   0,seq_wait,3
@@ -1020,15 +1048,17 @@ Pulse_Test:
     .byte   2,seq_wait,3
     .byte   3,seq_wait,3
     .byte   seq_loop
+    .align  2
     .word   1b
     
 Vib_Test:
     .byte   6
 1:  .byte   1,2,3,2,1,0,-1,-2,-3,-2,-1,0
     .byte   pitch_loop
+    .align  2
     .word   1b
     
-    .align  4
+    .align  2
 DS_TestSong:
     .hword  0
     .byte   6,6
@@ -1084,7 +1114,7 @@ DS_MusicSpeedTick:      .hword  0
 DS_MusicTimer:          .hword  0
 DS_StereoFlags:         .hword  0
 DS_GlobalTranspose:     .hword  0
-    .align  4
+    .align  2
 DS_CH1_EchoBuffer:      .word   0
 DS_CH2_EchoBuffer:      .word   0
 DS_CH3_EchoBuffer:      .word   0
@@ -1112,7 +1142,6 @@ DS_MM6_SeqPtr:          .word   0
 DS_MM7_SeqPtr:          .word   0
 DS_MM8_SeqPtr:          .word   0
 
-    .align  4
 DS_CH1_ReturnPtr:       .word   0
 DS_CH1_VolPtr:          .word   0
 DS_CH1_ArpPtr:          .word   0
@@ -1126,7 +1155,6 @@ DS_CH1_PulseResetPtr:   .word   0
 DS_CH1_PulseReleasePtr: .word   0
 DS_CH1_PitchResetPtr:   .word   0
 DS_CH1_PitchReleasePtr: .word   0
-    .align  1
 DS_CH1_LoopCount:       .byte   0
 DS_CH1_VolDelay:        .byte   0
 DS_CH1_ArpDelay:        .byte   0
@@ -1137,12 +1165,11 @@ DS_CH1_Note:            .byte   0
 DS_CH1_Timer:           .byte   0
 DS_CH1_ArpTranspose:    .byte   0
 DS_CH1_PitchMode:       .byte   0
-    .align  2
+    .align  1
 DS_CH1_VibOffset:       .hword  0
 DS_CH1_SlideOffset:     .hword  0
 DS_CH1_SlideTarget:     .hword  0
 DS_CH1_SlideSpeed:      .hword  0
-    .align  1
 DS_CH1_NoteTarget:      .byte   0
 DS_CH1_Transpose:       .byte   0
 DS_CH1_Sweep:           .byte   0
@@ -1152,10 +1179,10 @@ DS_CH1_FirstNote:       .byte   0
 DS_CH1_Pulse:           .byte   0
 DS_CH1_Volume:          .byte   0
 DS_CH1_OldVolume:       .byte   0
-    .align  2
+    .align  1
 DS_CH1_Pitch:           .hword  0
 
-    .align  4
+    .align  2
 DS_CH2_ReturnPtr:       .word   0
 DS_CH2_VolPtr:          .word   0
 DS_CH2_ArpPtr:          .word   0
@@ -1169,7 +1196,6 @@ DS_CH2_PulseResetPtr:   .word   0
 DS_CH2_PulseReleasePtr: .word   0
 DS_CH2_PitchResetPtr:   .word   0
 DS_CH2_PitchReleasePtr: .word   0
-    .align  1
 DS_CH2_LoopCount:       .byte   0
 DS_CH2_VolDelay:        .byte   0
 DS_CH2_ArpDelay:        .byte   0
@@ -1180,12 +1206,11 @@ DS_CH2_Note:            .byte   0
 DS_CH2_Timer:           .byte   0
 DS_CH2_ArpTranspose:    .byte   0
 DS_CH2_PitchMode:       .byte   0
-    .align  2
+    .align  1
 DS_CH2_VibOffset:       .hword  0
 DS_CH2_SlideOffset:     .hword  0
 DS_CH2_SlideTarget:     .hword  0
 DS_CH2_SlideSpeed:      .hword  0
-    .align  1
 DS_CH2_NoteTarget:      .byte   0
 DS_CH2_Transpose:       .byte   0
 DS_CH2_ChannelVol:      .byte   0
@@ -1194,10 +1219,10 @@ DS_CH2_FirstNote:       .byte   0
 DS_CH2_Pulse:           .byte   0
 DS_CH2_Volume:          .byte   0
 DS_CH2_OldVolume:       .byte   0
-    .align  2
+    .align  1
 DS_CH2_Pitch:           .hword  0
 
-    .align  4
+    .align  2
 DS_CH3_ReturnPtr:       .word   0
 DS_CH3_VolPtr:          .word   0
 DS_CH3_ArpPtr:          .word   0
@@ -1211,7 +1236,6 @@ DS_CH3_WaveResetPtr:    .word   0
 DS_CH3_WaveReleasePtr:  .word   0
 DS_CH3_PitchResetPtr:   .word   0
 DS_CH3_PitchReleasePtr: .word   0
-    .align  1
 DS_CH3_LoopCount:       .byte   0
 DS_CH3_VolDelay:        .byte   0
 DS_CH3_ArpDelay:        .byte   0
@@ -1222,12 +1246,11 @@ DS_CH3_Note:            .byte   0
 DS_CH3_Timer:           .byte   0
 DS_CH3_ArpTranspose:    .byte   0
 DS_CH3_PitchMode:       .byte   0
-    .align  2
+    .align  1
 DS_CH3_VibOffset:       .hword  0
 DS_CH3_SlideOffset:     .hword  0
 DS_CH3_SlideTarget:     .hword  0
 DS_CH3_SlideSpeed:      .hword  0
-    .align  1
 DS_CH3_NoteTarget:      .byte   0
 DS_CH3_Transpose:       .byte   0
 DS_CH3_EchoPos:         .byte   0
@@ -1235,10 +1258,10 @@ DS_CH3_FirstNote:       .byte   0
 DS_CH3_Wave:            .byte   0
 DS_CH3_OldWave:         .byte   0
 DS_CH3_Volume:          .byte   0
-    .align  2
+    .align  1
 DS_CH3_Pitch:           .hword  0
 
-    .align  4
+    .align  2
 DS_CH4_ReturnPtr:       .word   0
 DS_CH4_VolPtr:          .word   0
 DS_CH4_ArpPtr:          .word   0
@@ -1249,7 +1272,6 @@ DS_CH4_ArpResetPtr:     .word   0
 DS_CH4_ArpReleasePtr:   .word   0
 DS_CH4_ModeResetPtr:    .word   0
 DS_CH4_ModeReleasePtr:  .word   0
-    .align  1
 DS_CH4_LoopCount:       .byte   0
 DS_CH4_VolDelay:        .byte   0
 DS_CH4_ArpDelay:        .byte   0
@@ -1264,6 +1286,5 @@ DS_CH4_FirstNote:       .byte   0
 DS_CH4_Mode:            .byte   0
 DS_CH4_Volume:          .byte   0
 DS_CH4_OldVolume:       .byte   0
-    .align  4
 
 DS_RAMEnd:
