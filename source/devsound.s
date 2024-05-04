@@ -178,6 +178,20 @@
     .macro brk
     mov     r11,r11
     .endm
+    
+    .macro align_word reg1,reg2
+    ldr     \reg2,=0xFFFFFFFC
+    push    {\reg1}
+    ands    \reg1,\reg2
+    movs    \reg2,\reg1
+    pop     {\reg1}
+    cmp     \reg1,\reg2
+    beq     0f
+    ldr     \reg2,=0xFFFFFFFC
+    adds    \reg1,4
+    ands    \reg1,\reg2
+0:  
+    .endm
 
 @ =============================================================================
 @ Sound command definitions
@@ -745,10 +759,7 @@ DS_UpdateTableSingle:
     strb    r0,[r3]
     b       DS_TableDone
 DS_TableLoop:
-    @ align to nearest word
-    adds    r5,4
-    ldr     r6,=0xFFFFFFFC
-    ands    r5,r6
+    align_word r5,r6
     ldr     r5,[r5]
     b       1b
 DS_TableWait:
@@ -1009,6 +1020,8 @@ DS_CH1_Command:
     ldr     r2,=DS_CH1_CommandTable
     movs    r3,0x7f
     ands    r0,r3
+    movs    r3,4
+    muls    r0,r3
     adds    r2,r0
     ldr     r7,[r2]
     adds    r7,1 @ add 1 to jump address to ensure we stay in thumb mode
@@ -1048,10 +1061,7 @@ DS_CH1_CMD_Dummy:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetInstrument:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
+    align_word r1,r7
     @ read word
     ldr     r2,[r1]
     adds    r1,4
@@ -1099,11 +1109,7 @@ DS_CH1_CMD_SetInstrument:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Jump:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
-    @ read word
+    align_word  r1,r7
     ldr     r1,[r1]
     b       DS_CH1_GetByte
 
@@ -1133,7 +1139,7 @@ DS_CH1_CMD_Call:
 DS_CH1_CMD_Return:
     ldr     r2,=DS_CH1_ReturnPtr
     ldr     r1,[r2]
-    b       DS_CH1_CMD_Jump
+    b       DS_CH1_GetByte
 
 DS_CH1_CMD_SlideUp:
     ldrb    r0,[r1]
@@ -1226,10 +1232,7 @@ DS_CH1_CMD_ResetTransposeGlobal:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SetArpPtr:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
+    align_word  r1,r7
     @ read word
     ldr     r0,[r1]
     adds    r1,4
@@ -1238,11 +1241,7 @@ DS_CH1_CMD_SetArpPtr:
 
 
 DS_CH1_CMD_SetSpeed:
-    @ align r1 to next word
-    adds    r1,2
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
-    @ read halfword
+    align_word  r1,r7
     ldrh    r0,[r1]
     adds    r1,1
     ldr     r2,=DS_MusicSpeed
@@ -1422,6 +1421,8 @@ DS_CH2_Command:
     ldr     r2,=DS_CH2_CommandTable
     movs    r3,0x7f
     ands    r0,r3
+    movs    r3,4
+    muls    r0,r3
     adds    r2,r0
     ldr     r7,[r2]
     adds    r7,1 @ add 1 to jump address to ensure we stay in thumb mode
@@ -1460,11 +1461,7 @@ DS_CH2_CMD_Dummy:
     b       DS_CH2_GetByte
 
 DS_CH2_CMD_SetInstrument:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
-    @ read word
+    align_word  r1,r7
     ldr     r2,[r1]
     adds    r1,4
     ldr     r3,=DS_CH2_VolPtr
@@ -1511,10 +1508,7 @@ DS_CH2_CMD_SetInstrument:
     b       DS_CH2_GetByte
 
 DS_CH2_CMD_Jump:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
+    align_word  r1,r7
     @ read word
     ldr     r1,[r1]
     b       DS_CH2_GetByte
@@ -1545,7 +1539,7 @@ DS_CH2_CMD_Call:
 DS_CH2_CMD_Return:
     ldr     r2,=DS_CH2_ReturnPtr
     ldr     r1,[r2]
-    b       DS_CH2_CMD_Jump
+    b       DS_CH2_GetByte
 
 DS_CH2_CMD_SlideUp:
     ldrb    r0,[r1]
@@ -1638,21 +1632,14 @@ DS_CH2_CMD_ResetTransposeGlobal:
     b       DS_CH2_GetByte
 
 DS_CH2_CMD_SetArpPtr:
-    @ align r1 to next word
-    adds    r1,4
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
-    @ read word
+    align_word  r1,r7
     ldr     r0,[r1]
     adds    r1,4
     @ TODO
     b       DS_CH2_GetByte
 
 DS_CH2_CMD_SetSpeed:
-    @ align r1 to next word
-    adds    r1,2
-    ldr     r7,=0xFFFFFFFC
-    ands    r1,r7
+    align_word  r1,r7
     @ read halfword
     ldrh    r0,[r1]
     adds    r1,1

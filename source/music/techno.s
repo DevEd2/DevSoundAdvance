@@ -18,6 +18,7 @@ Mus_Techno:
 
 @ ----------------
 
+    .align  2
 Ins_Lead1:
     .word Vol_Lead1,DS_DummyTable,Pulse_Lead1,Vib_Lead1
     .word Vol_Lead1R,0,0,0
@@ -231,7 +232,7 @@ Vib_Lead2:
 
 Mus_Techno_CH1:
     sound_instrument Ins_PulseEcho2
-    rest 128
+@    rest 128
 0:
     sound_call 3f
     sound_loop 9,0b
@@ -287,7 +288,7 @@ Mus_Techno_CH1:
 @ ----------------
 
 Mus_Techno_CH2:
-    rest 128
+@    rest 128
 0:
     sound_instrument Ins_Arp1
     sound_volume 15
@@ -323,7 +324,8 @@ Mus_Techno_CH2:
     sound_jump 0b
 2:
     sound_set_arp_ptr Arp_1_037
-    rest 2
+    @rest 2
+    note nC_,4,2
     note nC_,5,2
     note nC_,5,3
     note nC_,5,2
@@ -377,8 +379,8 @@ Mus_Techno_CH2:
 Mus_Techno_CH3:
     sound_instrument Ins_WaveBass2
 1:
-    sound_call 13f
-    sound_loop 7,1b
+@    sound_call 13f
+@    sound_loop 7,1b
 2:
     sound_call 13f
     sound_loop 3,2b
@@ -501,10 +503,10 @@ Mus_Techno_CH3:
 @ ----------------
 
 Mus_Techno_CH4:
-    sound_call 4f
+@    sound_call 4f
 1:
-    sound_call 5f
-    sound_loop 9,1b
+@    sound_call 5f
+@    sound_loop 9,1b
 2:
     sound_call 4f
 3:
