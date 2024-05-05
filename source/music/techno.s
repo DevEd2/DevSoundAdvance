@@ -3,8 +3,8 @@
 Mus_Techno:
     .hword  0   @ mode 0 - DMG only
     .byte   7,7 @ song speed 7/7
-    .word Mus_Techno_CH1
     .word Mus_Techno_CH2
+    .word Mus_Techno_CH1
     .word Mus_Techno_CH3
     .word Mus_Techno_CH4
     .word DS_DummyChannel
@@ -157,7 +157,7 @@ Arp_1_038:
     .align  2
     .word Arp_1_038
 Arp_BigArp:
-    .byte 0,seq_wait,3,2,2,2,5,seq_wait,3,9,9,9,12,seq_wait,3,9,9,9,7,seq_wait,3,5,5,5
+    .byte 0,0,0,0,2,2,2,5,5,5,5,9,9,9,12,12,12,12,3,9,9,9,7,7,7,7,5,5,5
     .byte seq_loop
     .align  2
     .word Arp_BigArp
@@ -324,8 +324,7 @@ Mus_Techno_CH2:
     sound_jump 0b
 2:
     sound_set_arp_ptr Arp_1_037
-    @rest 2
-    note nC_,4,2
+    rest 2
     note nC_,5,2
     note nC_,5,3
     note nC_,5,2

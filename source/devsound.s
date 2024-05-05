@@ -750,7 +750,7 @@ DS_UpdateTableSingle:
     adds    r5,1
     cmp     r0,seq_end
     bne     2f
-    pop     {pc}
+    bx      lr
 2:  cmp     r0,seq_loop
     beq     DS_TableLoop
     cmp     r0,seq_wait
@@ -764,7 +764,7 @@ DS_TableLoop:
     b       1b
 DS_TableWait:
     ldrb    r0,[r5]
-    adds    r0,1
+    adds    r5,1
     strb    r0,[r4]
     @ fall through
 DS_TableDone:
@@ -1130,6 +1130,7 @@ DS_CH1_CMD_Loop:
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Call:
+    align_word  r1,r7
     adds    r1,4
     ldr     r2,=DS_CH1_ReturnPtr
     str     r1,[r2]
@@ -1236,7 +1237,10 @@ DS_CH1_CMD_SetArpPtr:
     @ read word
     ldr     r0,[r1]
     adds    r1,4
-    @ TODO
+    ldr     r2,=DS_CH1_ArpPtr
+    str     r0,[r2]
+    ldr     r2,=DS_CH1_ArpResetPtr
+    str     r0,[r2]
     b       DS_CH1_GetByte
 
 
