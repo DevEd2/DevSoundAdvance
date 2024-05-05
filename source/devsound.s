@@ -791,7 +791,11 @@ DS_UpdateRegisters:
     ldr     r0,=0x8000
     ldr     r2,=REG_SOUND1CNT_X
     strh    r0,[r2]
-1:  @ pulse
+1:  ldr     r1,=DS_CH1_Note
+    ldrb    r0,[r1]
+    cmp     r0,0x7D
+    bcs     2f
+    @ pulse
     ldr     r1,=DS_CH1_Pulse
     ldr     r2,=REG_NR11
     ldrb    r0,[r1]
@@ -816,50 +820,7 @@ DS_UpdateRegisters:
     adds    r7,r2
     ldr     r1,=REG_SOUND1CNT_X
     strh    r7,[r1]
-    
-    @ DMG pulse 2
-    @ volume
-    ldr     r1,=DS_CH2_Volume
-    ldr     r2,=DS_CH2_OldVolume
-    ldrb    r0,[r1]
-    ldrb    r4,[r2]
-    cmp     r0,r4
-    beq     2f
-    strb    r0,[r2]
-    ldr     r1,=REG_NR22
-    lsls    r0,4
-    strb    r0,[r1]
-    ldr     r0,=0x8000
-    ldr     r2,=REG_SOUND2CNT_H
-    strh    r0,[r2]
-2:  @ pulse
-    ldr     r1,=DS_CH2_Pulse
-    ldr     r2,=REG_NR21
-    ldrb    r0,[r1]
-    lsls    r0,6
-    strb    r0,[r2]
-    @ note + transpose + arpeggio
-    ldr     r1,=DS_CH2_Note
-    ldr     r2,=DS_CH2_Transpose
-    ldr     r3,=DS_CH2_ArpTranspose
-    ldrb    r0,[r1]
-    ldrb    r2,[r2]
-    ldrb    r3,[r3]
-    adds    r0,r2    
-    adds    r0,r3
-    bl      DS_GetNoteFrequencyDMG
-    @ note pitch + pitch table offset + note slide offset
-    ldr     r1,=DS_CH2_VibOffset
-    ldr     r2,=DS_CH2_SlideOffset
-    ldrh    r1,[r1]
-    ldrh    r2,[r2]
-    adds    r7,r1
-    adds    r7,r2
-    ldr     r1,=REG_SOUND2CNT_H
-    strh    r7,[r1]
-    
-    pop     {pc}
-
+2:  pop     {pc}
 
 @ ======================================================================
 
@@ -885,7 +846,7 @@ DS_CH1_GetByte:
     ldrb    r0,[r1]
     adds    r1,1
     cmp     r0,0x80
-    bhs     DS_CH1_Command
+    bcs     DS_CH1_Command
     cmp     r0,0x7f
     beq     DS_CH1_Rest
     cmp     r0,0x7e
@@ -939,7 +900,7 @@ DS_CH1_GetByte:
     bne     2b
     @ reset arpeggio transpose
     ldr     r2,=DS_CH1_ArpTranspose
-    ldrb    r4,[r2]
+    strb    r4,[r2]
 3:  @ reset pitch bend and pitch macro offsets
     movs    r0,0
     ldr     r2,=DS_CH1_VibOffset
@@ -982,7 +943,7 @@ DS_CH1_GetByte:
     ldrb    r0,[r2]
     cmp     r0,0
     beq     DS_CH1_GetByte
-    bne     JumpTo_DS_CH1_DoneUpdating
+    b       JumpTo_DS_CH1_DoneUpdating
 JumpTo_DS_CH1_Done:
     b       DS_CH1_Done
 DS_CH1_Rest:

@@ -12,7 +12,7 @@ int main()
 	irq_init(NULL);
 	irq_add(II_VBLANK, NULL);
 	
-	DS_LoadSong(MUS_TECHNO);
+	DS_LoadSong(MUS_TEST);
 	
 	REG_DISPCNT = DCNT_MODE0 | DCNT_BG0;
 	
