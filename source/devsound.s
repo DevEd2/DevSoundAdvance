@@ -37,12 +37,57 @@
 @ Flags
 @ =============================================================================
 
-@    .equ    ENABLE_ZOMBIE_MODE, 1   @ set to 0 for emulator compatibility
-
+    @ Timer = 62610 = 65536 - (16777216 /  5734), buf = 96
+    @ Timer = 63940 = 65536 - (16777216 / 10512), buf = 176
+    @ Timer = 64282 = 65536 - (16777216 / 13379), buf = 224
+    @ Timer = 64612 = 65536 - (16777216 / 18157), buf = 304
+    @ Timer = 64738 = 65536 - (16777216 / 21024), buf = 352
+    @ Timer = 64909 = 65536 - (16777216 / 26758), buf = 448
+    @ Timer = 65004 = 65536 - (16777216 / 31536), buf = 528
+    @ Timer = 65073 = 65536 - (16777216 / 36314), buf = 608
+    @ Timer = 65118 = 65536 - (16777216 / 40137), buf = 672
+    @ Timer = 65137 = 65536 - (16777216 / 42048), buf = 704
+    .equ    SAMPLE_RATE,    13379
+    .equ    TIMER_SPEED,    65536-(16777216/SAMPLE_RATE)
+    .equ    BUFFER_SIZE,    SAMPLE_RATE/(59+(5/7)) @ ffs can't do decimals?
+    
+    .if (BUFFER_SIZE%16) == 0
+    .error "Sound buffer size must be a multiple of 16 bytes! Sample rate should be changed to compensate."
+    .endif
+    
 @ =============================================================================
 @ Equates
 @ =============================================================================
 
+    @ Timer register defines
+    .equ    REG_TM0CNT_L,   0x04000100
+    .equ    REG_TM1CNT_L,   0x04000104
+    .equ    REG_TM2CNT_L,   0x04000108
+    .equ    REG_TM3CNT_L,   0x0400010C
+    .equ    REG_TM0CNT_H,   0x04000102
+    .equ    REG_TM1CNT_H,   0x04000106
+    .equ    REG_TM2CNT_H,   0x0400010A
+    .equ    REG_TM3CNT_H,   0x0400010E
+    
+    @ DMA register defines
+    .equ    REG_DMA0SAD,    0x040000B0
+    .equ    REG_DMA0DAD,    0x040000B4
+    .equ    REG_DMA0CNT_L,  0x040000B8
+    .equ    REG_DMA0CNT_H,  0x040000BA
+    .equ    REG_DMA1SAD,    0x040000BC
+    .equ    REG_DMA1DAD,    0x040000C0
+    .equ    REG_DMA1CNT_L,  0x040000C4
+    .equ    REG_DMA1CNT_H,  0x040000C6
+    .equ    REG_DMA2SAD,    0x040000C8
+    .equ    REG_DMA2DAD,    0x040000CC
+    .equ    REG_DMA2CNT_L,  0x040000D0
+    .equ    REG_DMA2CNT_H,  0x040000D2
+    .equ    REG_DMA3SAD,    0x040000D4
+    .equ    REG_DMA3DAD,    0x040000D8
+    .equ    REG_DMA3CNT_L,  0x040000DC
+    .equ    REG_DMA3CNT_H,  0x040000DE
+
+    @ Sound register defines
     .equ    REG_SOUND1CNT_L,0x04000060 @ NR10
     .equ    REG_SOUND1CNT_H,0x04000062 @ NR11 + NR12
     .equ    REG_SOUND1CNT_X,0x04000064 @ NR13 + NR14
@@ -70,22 +115,22 @@
     .equ    REG_NR12,       0x04000063
     .equ    REG_NR13,       0x04000064
     .equ    REG_NR14,       0x04000065
-    
     .equ    REG_NR21,       0x04000068
     .equ    REG_NR22,       0x04000069
     .equ    REG_NR23,       0x0400006C
     .equ    REG_NR24,       0x0400006D
-    
     .equ    REG_NR30,       0x04000070
     .equ    REG_NR31,       0x04000072
     .equ    REG_NR32,       0x04000073
     .equ    REG_NR33,       0x04000074
     .equ    REG_NR34,       0x04000075
-    
     .equ    REG_NR41,       0x04000078
     .equ    REG_NR42,       0x04000079
     .equ    REG_NR43,       0x0400007C
     .equ    REG_NR44,       0x0400007D
+    .equ    REG_NR50,       0x04000080
+    .equ    REG_NR51,       0x04000081
+    .equ    REG_NR52,       0x04000084
     
     @ DMA registers
     .equ    REG_FIFO_A_L,   0x040000A0 @ FIFO A
@@ -190,7 +235,7 @@
     ldr     \reg2,=0xFFFFFFFC
     adds    \reg1,4
     ands    \reg1,\reg2
-0:  
+0:  @ can't have a label and an endm on the same line smh my head
     .endm
 
 @ =============================================================================
@@ -331,14 +376,12 @@
     .byte 0x88
     .endm
     
-    @ Play a sample on a given direct DMA channel
-    @ WARNING: Only effective if MinMod channels are not in use!
-    .global sound_sample
-    .macro sound_sample channel, ptr
+    @ Enable/disable pitch sweep.
+    @ Only effective on DMG pulse 1.
+    .global sound_sweep
+    .macro sound_sweep amount
     .byte 0x89
-    .byte \channel
-    .align 2
-    .word ptr
+    .byte \amount
     .endm
     
     @ Set volume for current channel
@@ -555,6 +598,7 @@ DS_Init:
     str     r0,[r2]
     str     r0,[r3]
 
+    @ init timer
     
     pop     {r0-r12, lr}
     bx      lr
@@ -802,15 +846,32 @@ DS_UpdateRegisters:
     lsls    r0,6
     strb    r0,[r2]
     @ note + transpose + arpeggio
+    ldr     r3,=DS_CH1_ArpTranspose
+    ldr     r0,[r3]
+    cmp     r0,0x40
+    bcs     3f
     ldr     r1,=DS_CH1_Note
     ldr     r2,=DS_CH1_Transpose
-    ldr     r3,=DS_CH1_ArpTranspose
     ldrb    r0,[r1]
     ldrb    r2,[r2]
     ldrb    r3,[r3]
     adds    r0,r2    
     adds    r0,r3
-    bl      DS_GetNoteFrequencyDMG
+    b       5f
+3:  cmp     r0,0x80
+    bcs     4f
+    ldr     r1,=DS_CH1_Note
+    ldr     r2,=DS_CH1_Transpose
+    ldrb    r0,[r1]
+    ldrb    r2,[r2]
+    ldrb    r3,[r3]
+    adds    r0,r2    
+    subs    r3,0x40
+    subs    r0,r3
+    b       5f
+4:  subs    r0,0x80
+    @ fall through
+5:  bl      DS_GetNoteFrequencyDMG
     @ note pitch + pitch table offset + note slide offset
     ldr     r1,=DS_CH1_VibOffset
     ldr     r2,=DS_CH1_SlideOffset
@@ -1615,5 +1676,8 @@ DS_CH4_FirstNote:       .byte   0
 DS_CH4_Mode:            .byte   0
 DS_CH4_Volume:          .byte   0
 DS_CH4_OldVolume:       .byte   0
+
+DS_AudioBuffer1:        .space  BUFFER_SIZE
+DS_AudioBuffer2:        .space  BUFFER_SIZE
 
 DS_RAMEnd:
