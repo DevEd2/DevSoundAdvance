@@ -829,8 +829,10 @@ DS_UpdateRegisters:
     cmp     r0,r4
     beq     1f
     strb    r0,[r2]
-    ldr     r1,=REG_NR12
+    movs    r2,0xF
+    ands    r0,r2
     lsls    r0,4
+    ldr     r1,=REG_NR12
     strb    r0,[r1]
     ldr     r0,=0x8000
     ldr     r2,=REG_SOUND1CNT_X
@@ -850,10 +852,26 @@ DS_UpdateRegisters:
     ldr     r0,[r3]
     cmp     r0,0x40
     bcs     3f
-    ldr     r1,=DS_CH1_Note
-    ldr     r2,=DS_CH1_Transpose
+    @ check if echo should be applied (bit 7 of volume)
+    ldr     r1,=DS_CH1_Volume
     ldrb    r0,[r1]
-    ldrb    r2,[r2]
+    cmp     r0,0x80
+    bcs     6f
+    ldr     r1,=DS_CH1_Note
+    b       7f
+6:  ldr     r1,=DS_CH1_EchoBuffer
+    ldr     r2,=DS_CH1_EchoPos
+    ldrb    r0,[r2]
+    subs    r0,2
+    movs    r4,3
+    ands    r0,r4
+    ldrb    r0,[r1,r0]
+    ldr     r2,=DS_CH1_Transpose
+    b       8f
+    @ fall through
+7:  ldr     r2,=DS_CH1_Transpose
+    ldrb    r0,[r1]
+8:  ldrb    r2,[r2]
     ldrb    r3,[r3]
     adds    r0,r2    
     adds    r0,r3
@@ -907,7 +925,7 @@ DS_CH1_GetByte:
     ldrb    r0,[r1]
     adds    r1,1
     cmp     r0,0x80
-    bcs     DS_CH1_Command
+    bcs     JumpTo_DS_CH1_Command
     cmp     r0,0x7f
     beq     DS_CH1_Rest
     cmp     r0,0x7e
@@ -930,8 +948,10 @@ DS_CH1_GetByte:
     strb    r0,[r2,3]
 1:  @ update echo buffer
     ldr     r2,=DS_CH1_EchoPos
+    ldrb    r2,[r2]
     ldr     r3,=DS_CH1_EchoBuffer
-    strh    r0,[r3,r2]
+    strb    r0,[r3,r2]
+    ldr     r2,=DS_CH1_EchoPos
     ldrb    r0,[r2]
     adds    r0,1
     movs    r3,3
@@ -1007,6 +1027,8 @@ DS_CH1_GetByte:
     b       JumpTo_DS_CH1_DoneUpdating
 JumpTo_DS_CH1_Done:
     b       DS_CH1_Done
+JumpTo_DS_CH1_Command:
+    b       DS_CH1_Command
 DS_CH1_Rest:
     @ set note + timer
     ldr     r2,=DS_CH1_Note
@@ -1033,7 +1055,30 @@ DS_CH1_Release:
     adds    r1,1
     ldr     r2,=DS_CH1_Timer
     strb    r0,[r2]
-    @ TODO
+    ldr     r2,=DS_CH1_VolReleasePtr
+    ldr     r0,[r2]
+    cmp     r0,0
+    beq     1f
+    ldr     r3,=DS_CH1_VolPtr
+    str     r0,[r3]
+1:  ldr     r2,=DS_CH1_ArpReleasePtr
+    ldr     r0,[r2]
+    cmp     r0,0
+    beq     2f
+    ldr     r3,=DS_CH1_ArpPtr
+    str     r0,[r3]
+2:  ldr     r2,=DS_CH1_PulseReleasePtr
+    ldr     r0,[r2]
+    cmp     r0,0
+    beq     3f
+    ldr     r3,=DS_CH1_PulsePtr
+    str     r0,[r3]  
+3:  ldr     r2,=DS_CH1_PitchReleasePtr
+    ldr     r0,[r2]
+    cmp     r0,0
+    beq     JumpTo_DS_CH1_DoneUpdating
+    ldr     r3,=DS_CH1_PitchPtr
+    str     r0,[r3]
     b       DS_CH1_DoneUpdating
 
 DS_CH1_Command:

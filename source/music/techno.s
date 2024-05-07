@@ -3,8 +3,8 @@
 Mus_Techno:
     .hword  0   @ mode 0 - DMG only
     .byte   7,7 @ song speed 7/7
-    .word Mus_Techno_CH2
     .word Mus_Techno_CH1
+    .word Mus_Techno_CH2
     .word Mus_Techno_CH3
     .word Mus_Techno_CH4
     .word DS_DummyChannel
