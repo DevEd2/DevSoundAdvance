@@ -330,7 +330,7 @@
     .global sound_loop
     .macro sound_loop cnt,ptr
     .byte 0x82
-    .byte \cnt
+    .byte \cnt + 1
     .align 2
     .word \ptr
     .endm
@@ -826,11 +826,9 @@ DS_UpdateRegisters:
     ldr     r2,=DS_CH1_OldVolume
     ldrb    r0,[r1]
     ldrb    r4,[r2]
+    strb    r0,[r2]
     cmp     r0,r4
     beq     1f
-    strb    r0,[r2]
-    movs    r2,0xF
-    ands    r0,r2
     lsls    r0,4
     ldr     r1,=REG_NR12
     strb    r0,[r1]
@@ -868,7 +866,6 @@ DS_UpdateRegisters:
     ldrb    r0,[r1,r0]
     ldr     r2,=DS_CH1_Transpose
     b       8f
-    @ fall through
 7:  ldr     r2,=DS_CH1_Transpose
     ldrb    r0,[r1]
 8:  ldrb    r2,[r2]
@@ -1185,15 +1182,16 @@ DS_CH1_CMD_Loop:
     adds    r1,1
     ldr     r2,=DS_CH1_LoopCount
     ldrb    r3,[r2]
-    cmp     r0,0
+    cmp     r3,0
     bne     1f
+    adds    r0,1
     strb    r0,[r2]
 1:  ldrb    r0,[r2]
     subs    r0,1
     strb    r0,[r2]
     cmp     r0,0
     bne     DS_CH1_CMD_Jump
-    adds    r1,2
+    align_word  r1,r7
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Call:

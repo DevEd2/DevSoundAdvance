@@ -29,5 +29,5 @@ int main()
 		tte_write(strbuf);
 		frame++;
 		VBlankIntrWait();
-	}
+    }
 }

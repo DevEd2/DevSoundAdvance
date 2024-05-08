@@ -288,7 +288,7 @@ Mus_Techno_CH1:
 @ ----------------
 
 Mus_Techno_CH2:
-@    rest 128
+    rest 128
 0:
     sound_instrument Ins_Arp1
     sound_volume 15
