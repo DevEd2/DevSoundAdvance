@@ -238,6 +238,7 @@
 0:  @ can't have a label and an endm on the same line smh my head
     .endm
 
+
 @ =============================================================================
 @ Sound command definitions
 @ =============================================================================
@@ -621,7 +622,7 @@ DS_LoadSong:
     @ get song mode
     ldrh    r0,[r1]
     ldr     r2,=DS_Mode
-    strh    r0,[r2]
+    strb    r0,[r2]
     add     r1,2
     @ get song speed
     ldrh    r0,[r1]
@@ -687,7 +688,7 @@ DS_Stop:
 DS_Update:
     push    {r0-r7,lr}
     ldr     r1,=DS_MusicPlaying
-    ldrh    r0,[r1]
+    ldrb    r0,[r1]
     cmp     r0,0
     beq     DS_NoUpdate
     bl      DS_UpdateMusic
@@ -700,27 +701,27 @@ DS_NoUpdate:
 DS_UpdateMusic:
     push    {lr}
     ldr     r1,=DS_MusicPlaying
-    ldrh    r0,[r1]
+    ldrb    r0,[r1]
     cmp     r0,0
     bne     1f
     pop     {pc}
 1:  ldr     r1,=DS_GlobalTick
-    ldrh    r0,[r1]
+    ldrb    r0,[r1]
     adds    r0,1
-    strh    r0,[r1]
+    strb    r0,[r1]
     
     ldr     r1,=DS_MusicSpeedTick
-    ldrh    r0,[r1]
+    ldrb    r0,[r1]
     subs    r0,1
-    strh    r0,[r1]
+    strb    r0,[r1]
     cmp     r0,0
     beq     2f
     pop     {pc}
 
 2:  ldr     r1,=DS_MusicTick
-    ldrh    r0,[r1]
+    ldrb    r0,[r1]
     adds    r0,1
-    strh    r0,[r1]
+    strb    r0,[r1]
     ldr     r1,=DS_MusicSpeed
     movs    r2,1
     ands    r0,r2
@@ -736,11 +737,47 @@ DS_UpdateMusic:
     
     pop     {pc}
 
+    .pool
+    
 @ ======================================================================
 
 DS_UpdateEffects:
     push    {lr}
-    
+    @ CH1 effects
+    ldr     r1,=DS_CH1_PitchMode
+    ldrb    r0,[r1]
+    movs    r2,PITCH_MODE_MASK
+    ands    r0,r2
+    beq     DS_CH1_DonePitch
+    cmp     r0,PITCH_MODE_SLIDE_UP
+    beq     DS_CH1_PitchSlideUp
+    cmp     r0,PITCH_MODE_SLIDE_DOWN
+    beq     DS_CH1_PitchSlideDown
+    @ since r0 will never be > 3 we can just fall through here
+DS_CH1_Portamento:
+    @ TODO
+    b       DS_CH1_DonePitch
+DS_CH1_PitchSlideUp:
+    ldr     r1,=DS_CH1_SlideSpeed
+    ldrb    r0,[r1]
+    b       DS_CH1_DoSlide
+DS_CH1_PitchSlideDown:
+    ldr     r1,=DS_CH1_SlideSpeed
+    ldrb    r0,[r1]
+    @ negate r0
+    ldr     r7,=-1
+    eors    r0,r7
+    adds    r0,1
+    @ fall through
+DS_CH1_DoSlide:
+    ldr     r1,=DS_CH1_SlideOffset
+    ldrh    r2,[r1]
+    adds    r0,r2,r0
+    ldr     r2,=0x7FF
+    ands    r0,r2
+    strh    r0,[r1]
+    @ fall through
+DS_CH1_DonePitch:
     pop     {pc}
 
 @ ======================================================================
@@ -819,7 +856,6 @@ DS_TableDone:
 
 DS_UpdateRegisters:
     push    {lr}
-
     @ DMG pulse 1
     @ volume
     ldr     r1,=DS_CH1_Volume
@@ -847,7 +883,7 @@ DS_UpdateRegisters:
     strb    r0,[r2]
     @ note + transpose + arpeggio
     ldr     r3,=DS_CH1_ArpTranspose
-    ldr     r0,[r3]
+    ldrb    r0,[r3]
     cmp     r0,0x40
     bcs     3f
     @ check if echo should be applied (bit 7 of volume)
@@ -874,7 +910,7 @@ DS_UpdateRegisters:
     adds    r0,r3
     b       5f
 3:  cmp     r0,0x80
-    bcs     4f
+    bpl     4f
     ldr     r1,=DS_CH1_Note
     ldr     r2,=DS_CH1_Transpose
     ldrb    r0,[r1]
@@ -888,13 +924,27 @@ DS_UpdateRegisters:
     @ fall through
 5:  bl      DS_GetNoteFrequencyDMG
     @ note pitch + pitch table offset + note slide offset
+    
     ldr     r1,=DS_CH1_VibOffset
-    ldr     r2,=DS_CH1_SlideOffset
     ldrh    r1,[r1]
-    ldrh    r2,[r2]
     adds    r7,r1
+    @ should we apply monty mode?
+    ldr     r1,=DS_CH1_PitchMode
+    ldrb    r0,[r1]
+    movs    r6,PITCH_BIT_MASK
+    ands    r0,r6
+    movs    r6,1 << PITCH_BIT_MONTY
+    cmp     r0,r6
+    bne     11f
+    ldr     r1,=DS_GlobalTick
+    ldrb    r0,[r1]
+    movs    r6,1
+    ands    r0,r6
+    bne     10f
+11: ldr     r2,=DS_CH1_SlideOffset
+    ldrh    r2,[r2]
     adds    r7,r2
-    ldr     r1,=REG_SOUND1CNT_X
+10: ldr     r1,=REG_SOUND1CNT_X
     strh    r7,[r1]
 2:  pop     {pc}
 
@@ -964,9 +1014,11 @@ DS_CH1_GetByte:
     ldrb    r0,[r2]
     movs    r3,PITCH_MODE_MASK
     ands    r0,r3
-    cmp     r0,0
-    bne     3f
-    ldr     r2,=DS_CH1_VolResetPtr
+    cmp     r0,PITCH_MODE_NONE
+    beq     6f
+    cmp     r0,PITCH_MODE_PORTAMENTO
+    bne     4f
+6:  ldr     r2,=DS_CH1_VolResetPtr
     ldr     r3,=DS_CH1_VolPtr
     movs    r4,3
 2:  ldr     r0,[r2]
@@ -1211,26 +1263,32 @@ DS_CH1_CMD_SlideUp:
     ldrb    r0,[r1]
     adds    r1,1
     ldr     r2,=DS_CH1_SlideSpeed
-    ldrb    r0,[r2]
+    strb    r0,[r2]
     ldr     r2,=DS_CH1_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_BIT_MASK
     ands    r0,r3
     adds    r0,PITCH_MODE_SLIDE_UP
     strb    r0,[r2]
+    movs    r0,0
+    ldr     r2,=DS_CH1_SlideOffset
+    strh    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_SlideDown:
     ldrb    r0,[r1]
     adds    r1,1
     ldr     r2,=DS_CH1_SlideSpeed
-    ldrb    r0,[r2]
+    strb    r0,[r2]
     ldr     r2,=DS_CH1_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_BIT_MASK
     ands    r0,r3
-    adds    r0,PITCH_MODE_SLIDE_UP
+    adds    r0,PITCH_MODE_SLIDE_DOWN
     strb    r0,[r2]
+    movs    r0,0
+    ldr     r2,=DS_CH1_SlideOffset
+    strh    r0,[r2]
     b       DS_CH1_GetByte
 
 DS_CH1_CMD_Portamento:
@@ -1379,10 +1437,8 @@ DS_ClearMem:
 @ DESTROYS: r0, r2, r3, r7
 DS_GetNoteFrequencyDMG:
     ldr     r2,=DS_FreqTable
-    movs    r3,2
-    muls    r0,r3
-    adds    r2,r0
-    ldrh    r7,[r2]
+    adds    r0,r0
+    ldrh    r7,[r2,r0]
     bx      lr
 
 @ INPUT:    r2 = wave pointer
@@ -1467,9 +1523,14 @@ DS_DummyPitch:
 TestInstrument:
     .word   Vol_Test,Arp_Test,Pulse_Test,Vib_Test
     .word   0,0,0,0
+TestInstrument2:
+    .word   Vol_Test2,DS_DummyTable,DS_DummyTable,DS_DummyPitch
+    .word   0,0,0,0
 
 Vol_Test:
     .byte   15,14,13,12,11,11,10,9,9,8,7,7,6,6,5,5,4,4,3,3,3,2,2,2,1,1,1,1,0,seq_end
+Vol_Test2:
+    .byte 15,13,12,11,11,10,seq_end
 Arp_Test:
 1:  .byte   12,12,12,12,0,0,0,0
     .byte   seq_loop
@@ -1510,15 +1571,29 @@ DS_TestSong:
     .word   DS_DummyChannel
 
 DS_Test_CH1:
-    sound_instrument    TestInstrument
-    note    nC_,4,3
-    note    nD_,4,3
-    note    nE_,4,3
-    note    nF_,4,3
-    note    nG_,4,3
-    note    nA_,4,3
-    note    nB_,4,3
-    note    nC_,5,4
+    sound_instrument TestInstrument
+    note nC_,4,3
+    note nD_,4,3
+    note nE_,4,3
+    note nF_,4,3
+    note nG_,4,3
+    note nA_,4,3
+    note nB_,4,3
+    note nC_,5,6
+    sound_instrument TestInstrument2
+    note nC_,4,6
+    sound_slide_up 4
+    wait 6
+    sound_slide_up 0
+    note nC_,4,6
+    sound_slide_down 4
+    wait 6
+    sound_slide_down 0
+    note nC_,5,12
+    sound_toggle_monty
+    sound_slide_down 4
+    wait 12
+    rest 1
     sound_end
 
     .include "../source/music/techno.s"
@@ -1533,20 +1608,20 @@ DS_Test_CH1:
 DS_RAMStart:
 
 .align 2
-DS_MusicPlaying:        .hword  0   @ 0 = music not playing, 1 = music playing
-DS_GlobalTick:          .hword  0
-DS_MusicFlags:          .hword  0   @  MMMMMMMM..BA4321
+DS_MusicPlaying:        .byte   0   @ 0 = music not playing, 1 = music playing
+DS_GlobalTick:          .byte   0
+DS_MusicFlags:          .byte   0   @  MMMMMMMM..BA4321
                                     @ 1, 2, 3, 4 = DMG channels
                                     @ A, B = Direct DMA channels
-                                    @ M = MinMod channels
-DS_MusicSpeed:          .hword  0   @ .......2 ......1
+    .align 1                        @ M = MinMod channels
+DS_MusicSpeed:          .word   0   @ .......2 ......1
                                     @ lower half = first speed, upper half = second speed
-DS_Mode:                .hword  0   @ (0 = DMG only, 1 = DMG + direct DMA, 2 = DMG + MinMod)
-DS_MusicTick:           .hword  0
-DS_MusicSpeedTick:      .hword  0
-DS_MusicTimer:          .hword  0
-DS_StereoFlags:         .hword  0
-DS_GlobalTranspose:     .hword  0
+DS_Mode:                .byte   0   @ (0 = DMG only, 1 = DMG + direct DMA, 2 = DMG + MinMod)
+DS_MusicTick:           .byte   0
+DS_MusicSpeedTick:      .byte   0
+DS_MusicTimer:          .byte   0
+DS_StereoFlags:         .byte   0
+DS_GlobalTranspose:     .byte   0
     .align  2
 DS_CH1_EchoBuffer:      .word   0
 DS_CH2_EchoBuffer:      .word   0
