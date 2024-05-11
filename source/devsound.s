@@ -733,7 +733,7 @@ DS_UpdateMusic:
     strh    r0,[r1]
     
     bl      DS_UpdateCH1
-    bl      DS_UpdateCH2
+@   bl      DS_UpdateCH2
     
     pop     {pc}
 
@@ -755,7 +755,70 @@ DS_UpdateEffects:
     beq     DS_CH1_PitchSlideDown
     @ since r0 will never be > 3 we can just fall through here
 DS_CH1_Portamento:
-    @ TODO
+    ldr     r1,=DS_CH1_NoteTarget
+    ldrb    r0,[r1]
+    ldr     r1,=DS_CH1_Note
+    ldrb    r1,[r1]
+    cmp     r1,r0
+    bpl     DS_CH1_PortaUp
+    bmi     DS_CH1_PortaDown
+    b       DS_CH1_PortaStop
+DS_CH1_PortaUp:
+    brk
+    ldr     r1,=DS_CH1_SlideOffset
+    ldrh    r2,[r1]
+    ldr     r3,=DS_CH1_SlideSpeed
+    ldrb    r0,[r3]
+    adds    r2,r0
+    strh    r2,[r1]
+    @ check if we've reached the target pitch
+    ldr     r1,=DS_CH1_Note
+    ldrb    r0,[r1]
+    bl      DS_GetNoteFrequencyDMG
+    adds    r7,r2
+    movs    r6,r7
+    ldr     r1,=DS_CH1_NoteTarget
+    ldrb    r0,[r1]
+    bl      DS_GetNoteFrequencyDMG
+    cmp     r7,r6
+    bhs     DS_CH1_PortaStop
+    b       DS_CH1_PortaDone
+DS_CH1_PortaDown:
+    brk
+    ldr     r1,=DS_CH1_SlideOffset
+    ldrh    r2,[r1]
+    ldr     r3,=DS_CH1_SlideSpeed
+    ldrb    r0,[r3]
+    subs    r2,r0
+    strh    r2,[r1]
+    @ check if we've reached the target pitch
+    ldr     r1,=DS_CH1_Note
+    ldrb    r0,[r1]
+    bl      DS_GetNoteFrequencyDMG
+    subs    r7,r2
+    movs    r6,r7
+    ldr     r1,=DS_CH1_NoteTarget
+    ldrb    r0,[r1]
+    bl      DS_GetNoteFrequencyDMG
+    cmp     r7,r6
+    bls     DS_CH1_PortaStop
+    b       DS_CH1_PortaDone
+DS_CH1_PortaStop:
+    ldr     r1,=DS_CH1_NoteTarget
+    ldr     r2,=DS_CH1_Note
+    ldrb    r0,[r1]
+    strb    r0,[r2]
+    ldr     r1,=DS_CH1_PitchMode
+    ldrb    r0,[r1]
+    movs    r2,PITCH_BIT_MASK
+    ands    r0,r2
+    strb    r0,[r2]    
+    ldr     r1,=DS_CH1_SlideOffset
+    movs    r0,0
+    strh    r0,[r1]
+    @ fall through
+DS_CH1_PortaDone:
+
     b       DS_CH1_DonePitch
 DS_CH1_PitchSlideUp:
     ldr     r1,=DS_CH1_SlideSpeed
@@ -924,7 +987,6 @@ DS_UpdateRegisters:
     @ fall through
 5:  bl      DS_GetNoteFrequencyDMG
     @ note pitch + pitch table offset + note slide offset
-    
     ldr     r1,=DS_CH1_VibOffset
     ldrh    r1,[r1]
     adds    r7,r1
@@ -941,7 +1003,8 @@ DS_UpdateRegisters:
     movs    r6,1
     ands    r0,r6
     bne     10f
-11: ldr     r2,=DS_CH1_SlideOffset
+11: 
+    ldr     r2,=DS_CH1_SlideOffset
     ldrh    r2,[r2]
     adds    r7,r2
 10: ldr     r1,=REG_SOUND1CNT_X
@@ -950,55 +1013,56 @@ DS_UpdateRegisters:
 
 @ ======================================================================
 
-DS_UpdateCH1:
+    .macro DS_UpdateChannel ch
+DS_UpdateCH\()\ch\() :
     push    {lr}
     ldr     r1,=DS_MusicFlags
     ldrb    r0,[r1]
-    movs    r2,0b00000001
+    movs    r2,1<<\ch
     ands    r0,r2
     cmp     r0,0
-    beq     JumpTo_DS_CH1_Done @ ugh
+    beq     JumpTo_DS_CH\()\ch\()_Done @ ugh
     
-    ldr     r1,=DS_CH1_Timer
+    ldr     r1,=DS_CH\()\ch\()_Timer
     ldrb    r0,[r1]
     subs    r0,1
     strb    r0,[r1]
     cmp     r0,0
-    bne     JumpTo_DS_CH1_Done
-    ldr     r1,=DS_CH1_SeqPtr
+    bne     JumpTo_DS_CH\()\ch\()_Done
+    ldr     r1,=DS_CH\()\ch\()_SeqPtr
     ldr     r1,[r1]
 
-DS_CH1_GetByte:
+DS_CH\()\ch\()_GetByte :
     ldrb    r0,[r1]
     adds    r1,1
     cmp     r0,0x80
-    bcs     JumpTo_DS_CH1_Command
+    bcs     JumpTo_DS_CH\()\ch\()_Command
     cmp     r0,0x7f
-    beq     DS_CH1_Rest
+    beq     DS_CH\()\ch\()_Rest
     cmp     r0,0x7e
-    beq     DS_CH1_Wait
+    beq     DS_CH\()\ch\()_Wait
     cmp     r0,0x7d
-    beq     DS_CH1_Release
+    beq     DS_CH\()\ch\()_Release
     @ default case: note
-    ldr     r2,=DS_CH1_Note
+    ldr     r2,=DS_CH\()\ch\()_Note
     strb    r0,[r2]
     @ echo buffer processing
-    ldr     r2,=DS_CH1_FirstNote
+    ldr     r2,=DS_CH\()\ch\()_FirstNote
     ldrb    r3,[r2]
     cmp     r3,0    @ is this the first note we've played on this channel?
     bne     1f      @ if yes, initialize the echo buffer
     strb    r0,[r2] @ store first note
-    ldr     r2,=DS_CH1_EchoBuffer
+    ldr     r2,=DS_CH\()\ch\()_EchoBuffer
     strb    r0,[r2,0]
     strb    r0,[r2,1]
     strb    r0,[r2,2]
     strb    r0,[r2,3]
 1:  @ update echo buffer
-    ldr     r2,=DS_CH1_EchoPos
+    ldr     r2,=DS_CH\()\ch\()_EchoPos
     ldrb    r2,[r2]
-    ldr     r3,=DS_CH1_EchoBuffer
+    ldr     r3,=DS_CH\()\ch\()_EchoBuffer
     strb    r0,[r3,r2]
-    ldr     r2,=DS_CH1_EchoPos
+    ldr     r2,=DS_CH\()\ch\()_EchoPos
     ldrb    r0,[r2]
     adds    r0,1
     movs    r3,3
@@ -1007,10 +1071,10 @@ DS_CH1_GetByte:
     @ set timer
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Timer
+    ldr     r2,=DS_CH\()\ch\()_Timer
     strb    r0,[r2]
     @ reset tables if applicable
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_MODE_MASK
     ands    r0,r3
@@ -1018,8 +1082,8 @@ DS_CH1_GetByte:
     beq     6f
     cmp     r0,PITCH_MODE_PORTAMENTO
     bne     4f
-6:  ldr     r2,=DS_CH1_VolResetPtr
-    ldr     r3,=DS_CH1_VolPtr
+6:  ldr     r2,=DS_CH\()\ch\()_VolResetPtr
+    ldr     r3,=DS_CH\()\ch\()_VolPtr
     movs    r4,3
 2:  ldr     r0,[r2]
     str     r0,[r3]
@@ -1029,111 +1093,111 @@ DS_CH1_GetByte:
     cmp     r4,0
     bne     2b
     @ reset arpeggio transpose
-    ldr     r2,=DS_CH1_ArpTranspose
+    ldr     r2,=DS_CH\()\ch\()_ArpTranspose
     strb    r4,[r2]
 3:  @ reset pitch bend and pitch macro offsets
     movs    r0,0
-    ldr     r2,=DS_CH1_VibOffset
+    ldr     r2,=DS_CH\()\ch\()_VibOffset
     strh    r0,[r2]
-    ldr     r2,=DS_CH1_SlideOffset
+    ldr     r2,=DS_CH\()\ch\()_SlideOffset
     strh    r0,[r2]
     @ reset pitch table
-    ldr     r2,=DS_CH1_PitchResetPtr
+    ldr     r2,=DS_CH\()\ch\()_PitchResetPtr
     ldr     r0,[r2]
-    ldr     r2,=DS_CH1_PitchPtr
+    ldr     r2,=DS_CH\()\ch\()_PitchPtr
     str     r0,[r2]
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_MODE_MASK
     ands    r0,r3
     cmp     r0,PITCH_MODE_PORTAMENTO
     beq     4f
-    ldr     r2,=DS_CH1_Note
+    ldr     r2,=DS_CH\()\ch\()_Note
     ldrb    r0,[r2]
-    ldr     r2,=DS_CH1_NoteTarget
+    ldr     r2,=DS_CH\()\ch\()_NoteTarget
     strb    r0,[r2]
     bl      DS_GetNoteFrequencyDMG
-    ldr     r2,=DS_CH1_SlideTarget
+    ldr     r2,=DS_CH\()\ch\()_SlideTarget
     strh    r7,[r2]
     b       5f
 4:  @ disable slide + monty on new note
     movs    r0,0
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
 5:  @ reset delays
     movs    r0,0
-    ldr     r2,=DS_CH1_VolDelay
+    ldr     r2,=DS_CH\()\ch\()_VolDelay
     strb    r0,[r2]
-    ldr     r2,=DS_CH1_ArpDelay
+    ldr     r2,=DS_CH\()\ch\()_ArpDelay
     strb    r0,[r2]
-    ldr     r2,=DS_CH1_PulseDelay
+    ldr     r2,=DS_CH\()\ch\()_PulseDelay
     strb    r0,[r2]
     @ check if we should get the next note
-    ldr     r2,=DS_CH1_Timer
+    ldr     r2,=DS_CH\()\ch\()_Timer
     ldrb    r0,[r2]
     cmp     r0,0
-    beq     DS_CH1_GetByte
-    b       JumpTo_DS_CH1_DoneUpdating
-JumpTo_DS_CH1_Done:
-    b       DS_CH1_Done
-JumpTo_DS_CH1_Command:
-    b       DS_CH1_Command
-DS_CH1_Rest:
+    beq     DS_CH\()\ch\()_GetByte
+    b       JumpTo_DS_CH\()\ch\()_DoneUpdating
+JumpTo_DS_CH\()\ch\()_Done :
+    b       DS_CH\()\ch\()_Done
+JumpTo_DS_CH\()\ch\()_Command:
+    b       DS_CH\()\ch\()_Command
+DS_CH\()\ch\()_Rest :
     @ set note + timer
-    ldr     r2,=DS_CH1_Note
+    ldr     r2,=DS_CH\()\ch\()_Note
     strb    r0,[r2]
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Timer
+    ldr     r2,=DS_CH\()\ch\()_Timer
     strb    r0,[r2]
     ldr     r0,=DS_RestVol
-    ldr     r2,=DS_CH1_VolPtr
+    ldr     r2,=DS_CH\()\ch\()_VolPtr
     str     r0,[r2]
     movs    r0,0
-    ldr     r2,=DS_CH1_Volume
+    ldr     r2,=DS_CH\()\ch\()_Volume
     strb    r0,[r2]
-    b       DS_CH1_DoneUpdating
-DS_CH1_Wait:
+    b       DS_CH\()\ch\()_DoneUpdating
+DS_CH\()\ch\()_Wait :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Timer
+    ldr     r2,=DS_CH\()\ch\()_Timer
     strb    r0,[r2]
-    b       DS_CH1_DoneUpdating
-DS_CH1_Release:
+    b       DS_CH\()\ch\()_DoneUpdating
+DS_CH\()\ch\()_Release :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Timer
+    ldr     r2,=DS_CH\()\ch\()_Timer
     strb    r0,[r2]
-    ldr     r2,=DS_CH1_VolReleasePtr
+    ldr     r2,=DS_CH\()\ch\()_VolReleasePtr
     ldr     r0,[r2]
     cmp     r0,0
     beq     1f
-    ldr     r3,=DS_CH1_VolPtr
+    ldr     r3,=DS_CH\()\ch\()_VolPtr
     str     r0,[r3]
-1:  ldr     r2,=DS_CH1_ArpReleasePtr
+1:  ldr     r2,=DS_CH\()\ch\()_ArpReleasePtr
     ldr     r0,[r2]
     cmp     r0,0
     beq     2f
-    ldr     r3,=DS_CH1_ArpPtr
+    ldr     r3,=DS_CH\()\ch\()_ArpPtr
     str     r0,[r3]
-2:  ldr     r2,=DS_CH1_PulseReleasePtr
+2:  ldr     r2,=DS_CH\()\ch\()_PulseReleasePtr
     ldr     r0,[r2]
     cmp     r0,0
     beq     3f
-    ldr     r3,=DS_CH1_PulsePtr
+    ldr     r3,=DS_CH\()\ch\()_PulsePtr
     str     r0,[r3]  
-3:  ldr     r2,=DS_CH1_PitchReleasePtr
+3:  ldr     r2,=DS_CH\()\ch\()_PitchReleasePtr
     ldr     r0,[r2]
     cmp     r0,0
-    beq     JumpTo_DS_CH1_DoneUpdating
-    ldr     r3,=DS_CH1_PitchPtr
+    beq     JumpTo_DS_CH\()\ch\()_DoneUpdating
+    ldr     r3,=DS_CH\()\ch\()_PitchPtr
     str     r0,[r3]
-    b       DS_CH1_DoneUpdating
+    b       DS_CH\()\ch\()_DoneUpdating
 
-DS_CH1_Command:
+DS_CH\()\ch\()_Command :
     cmp     r0,0xFF
-    beq     JumpTo_DS_CH1_CMD_End
-    ldr     r2,=DS_CH1_CommandTable
+    beq     JumpTo_DS_CH\()\ch\()_CMD_End
+    ldr     r2,=DS_CH\()\ch\()_CommandTable
     movs    r3,0x7f
     ands    r0,r3
     movs    r3,4
@@ -1143,96 +1207,96 @@ DS_CH1_Command:
     adds    r7,1 @ add 1 to jump address to ensure we stay in thumb mode
     bx      r7
 
-JumpTo_DS_CH1_DoneUpdating:
-    b       DS_CH1_DoneUpdating
-JumpTo_DS_CH1_GetByte:
-    b       DS_CH1_GetByte
-JumpTo_DS_CH1_CMD_End:
-    b       DS_CH1_CMD_End
+JumpTo_DS_CH\()\ch\()_DoneUpdating :
+    b       DS_CH\()\ch\()_DoneUpdating
+JumpTo_DS_CH\()\ch\()_GetByte :
+    b       DS_CH\()\ch\()_GetByte
+JumpTo_DS_CH\()\ch\()_CMD_End :
+    b       DS_CH\()\ch\()_CMD_End
     
     .pool   @ ugh x2
     
     .align  4
-DS_CH1_CommandTable:
-    .word   DS_CH1_CMD_SetInstrument
-    .word   DS_CH1_CMD_Jump
-    .word   DS_CH1_CMD_Loop
-    .word   DS_CH1_CMD_Call
-    .word   DS_CH1_CMD_Return
-    .word   DS_CH1_CMD_SlideUp
-    .word   DS_CH1_CMD_SlideDown
-    .word   DS_CH1_CMD_Portamento
-    .word   DS_CH1_CMD_ToggleMonty
-    .word   DS_CH1_CMD_Dummy
-    .word   DS_CH1_CMD_SetVol
-    .word   DS_CH1_CMD_SetTranspose
-    .word   DS_CH1_CMD_SetTransposeGlobal
-    .word   DS_CH1_CMD_ResetTranspose
-    .word   DS_CH1_CMD_ResetTransposeGlobal
-    .word   DS_CH1_CMD_SetArpPtr
-    .word   DS_CH1_CMD_SetSpeed
+DS_CH\()\ch\()_CommandTable :
+    .word   DS_CH\()\ch\()_CMD_SetInstrument
+    .word   DS_CH\()\ch\()_CMD_Jump
+    .word   DS_CH\()\ch\()_CMD_Loop
+    .word   DS_CH\()\ch\()_CMD_Call
+    .word   DS_CH\()\ch\()_CMD_Return
+    .word   DS_CH\()\ch\()_CMD_SlideUp
+    .word   DS_CH\()\ch\()_CMD_SlideDown
+    .word   DS_CH\()\ch\()_CMD_Portamento
+    .word   DS_CH\()\ch\()_CMD_ToggleMonty
+    .word   DS_CH\()\ch\()_CMD_Dummy
+    .word   DS_CH\()\ch\()_CMD_SetVol
+    .word   DS_CH\()\ch\()_CMD_SetTranspose
+    .word   DS_CH\()\ch\()_CMD_SetTransposeGlobal
+    .word   DS_CH\()\ch\()_CMD_ResetTranspose
+    .word   DS_CH\()\ch\()_CMD_ResetTransposeGlobal
+    .word   DS_CH\()\ch\()_CMD_SetArpPtr
+    .word   DS_CH\()\ch\()_CMD_SetSpeed
 
 
-DS_CH1_CMD_Dummy:
-    b       DS_CH1_GetByte
+DS_CH\()\ch\()_CMD_Dummy :
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SetInstrument:
+DS_CH\()\ch\()_CMD_SetInstrument :
     align_word r1,r7
     @ read word
     ldr     r2,[r1]
     adds    r1,4
-    ldr     r3,=DS_CH1_VolPtr
-    ldr     r4,=DS_CH1_VolResetPtr
+    ldr     r3,=DS_CH\()\ch\()_VolPtr
+    ldr     r4,=DS_CH\()\ch\()_VolResetPtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
     str     r0,[r4]
-    ldr     r3,=DS_CH1_ArpPtr
-    ldr     r4,=DS_CH1_ArpResetPtr
+    ldr     r3,=DS_CH\()\ch\()_ArpPtr
+    ldr     r4,=DS_CH\()\ch\()_ArpResetPtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
     str     r0,[r4]
-    ldr     r3,=DS_CH1_PulsePtr
-    ldr     r4,=DS_CH1_PulseResetPtr
+    ldr     r3,=DS_CH\()\ch\()_PulsePtr
+    ldr     r4,=DS_CH\()\ch\()_PulseResetPtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
     str     r0,[r4]
-    ldr     r3,=DS_CH1_PitchPtr
-    ldr     r4,=DS_CH1_PitchResetPtr
+    ldr     r3,=DS_CH\()\ch\()_PitchPtr
+    ldr     r4,=DS_CH\()\ch\()_PitchResetPtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
     str     r0,[r4]
     
-    ldr     r3,=DS_CH1_VolReleasePtr
+    ldr     r3,=DS_CH\()\ch\()_VolReleasePtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
-    ldr     r3,=DS_CH1_ArpReleasePtr
+    ldr     r3,=DS_CH\()\ch\()_ArpReleasePtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
-    ldr     r3,=DS_CH1_PulseReleasePtr
+    ldr     r3,=DS_CH\()\ch\()_PulseReleasePtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
-    ldr     r3,=DS_CH1_PitchReleasePtr
+    ldr     r3,=DS_CH\()\ch\()_PitchReleasePtr
     ldr     r0,[r2]
     adds    r2,4
     str     r0,[r3]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_Jump:
+DS_CH\()\ch\()_CMD_Jump :
     align_word  r1,r7
     ldr     r1,[r1]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_Loop:
+DS_CH\()\ch\()_CMD_Loop :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_LoopCount
+    ldr     r2,=DS_CH\()\ch\()_LoopCount
     ldrb    r3,[r2]
     cmp     r3,0
     bne     1f
@@ -1242,163 +1306,160 @@ DS_CH1_CMD_Loop:
     subs    r0,1
     strb    r0,[r2]
     cmp     r0,0
-    bne     DS_CH1_CMD_Jump
+    bne     DS_CH\()\ch\()_CMD_Jump
     align_word  r1,r7
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_Call:
+DS_CH\()\ch\()_CMD_Call :
     align_word  r1,r7
     adds    r1,4
-    ldr     r2,=DS_CH1_ReturnPtr
+    ldr     r2,=DS_CH\()\ch\()_ReturnPtr
     str     r1,[r2]
     subs    r1,4
-    b       DS_CH1_CMD_Jump
+    b       DS_CH\()\ch\()_CMD_Jump
 
-DS_CH1_CMD_Return:
-    ldr     r2,=DS_CH1_ReturnPtr
+DS_CH\()\ch\()_CMD_Return :
+    ldr     r2,=DS_CH\()\ch\()_ReturnPtr
     ldr     r1,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SlideUp:
+DS_CH\()\ch\()_CMD_SlideUp :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_SlideSpeed
+    ldr     r2,=DS_CH\()\ch\()_SlideSpeed
     strb    r0,[r2]
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_BIT_MASK
     ands    r0,r3
     adds    r0,PITCH_MODE_SLIDE_UP
     strb    r0,[r2]
     movs    r0,0
-    ldr     r2,=DS_CH1_SlideOffset
+    ldr     r2,=DS_CH\()\ch\()_SlideOffset
     strh    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SlideDown:
+DS_CH\()\ch\()_CMD_SlideDown :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_SlideSpeed
+    ldr     r2,=DS_CH\()\ch\()_SlideSpeed
     strb    r0,[r2]
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_BIT_MASK
     ands    r0,r3
     adds    r0,PITCH_MODE_SLIDE_DOWN
     strb    r0,[r2]
     movs    r0,0
-    ldr     r2,=DS_CH1_SlideOffset
+    ldr     r2,=DS_CH\()\ch\()_SlideOffset
     strh    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_Portamento:
+DS_CH\()\ch\()_CMD_Portamento :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_SlideSpeed
-    ldrb    r0,[r2]
-    ldr     r2,=DS_CH1_PitchMode
+    ldr     r2,=DS_CH\()\ch\()_SlideSpeed
+    strb    r0,[r2]
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_BIT_MASK
     ands    r0,r3
     adds    r0,PITCH_MODE_PORTAMENTO
     strb    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_ToggleMonty:
-    ldr     r2,=DS_CH1_PitchMode
+DS_CH\()\ch\()_CMD_ToggleMonty :
+    ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,1 << PITCH_BIT_MONTY
     eors    r0,r3
     strb    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SetVol:
+DS_CH\()\ch\()_CMD_SetVol :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_ChannelVol
+    ldr     r2,=DS_CH\()\ch\()_ChannelVol
     strb    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SetTranspose:
+DS_CH\()\ch\()_CMD_SetTranspose :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Transpose
+    ldr     r2,=DS_CH\()\ch\()_Transpose
     strb    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SetTransposeGlobal:
+DS_CH\()\ch\()_CMD_SetTransposeGlobal :
     ldrb    r0,[r1]
     adds    r1,1
-    ldr     r2,=DS_CH1_Transpose
+    ldr     r2,=DS_CH\()\ch\()_Transpose
     ldr     r3,=DS_CH2_Transpose
     ldr     r4,=DS_CH3_Transpose
     strb    r0,[r2]
     strb    r0,[r3]
     strb    r0,[r4]
     @ TODO: direct dma/directsound channels
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_ResetTranspose:
+DS_CH\()\ch\()_CMD_ResetTranspose :
     movs    r0,0
-    ldr     r2,=DS_CH1_Transpose
+    ldr     r2,=DS_CH\()\ch\()_Transpose
     strb    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_ResetTransposeGlobal:
+DS_CH\()\ch\()_CMD_ResetTransposeGlobal :
     movs    r0,0
-    ldr     r2,=DS_CH1_Transpose
+    ldr     r2,=DS_CH\()\ch\()_Transpose
     ldr     r3,=DS_CH2_Transpose
     ldr     r4,=DS_CH3_Transpose
     strb    r0,[r2]
     strb    r0,[r3]
     strb    r0,[r4]
     @ TODO: direct dma/directsound channels
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_SetArpPtr:
+DS_CH\()\ch\()_CMD_SetArpPtr :
     align_word  r1,r7
     @ read word
     ldr     r0,[r1]
     adds    r1,4
-    ldr     r2,=DS_CH1_ArpPtr
+    ldr     r2,=DS_CH\()\ch\()_ArpPtr
     str     r0,[r2]
-    ldr     r2,=DS_CH1_ArpResetPtr
+    ldr     r2,=DS_CH\()\ch\()_ArpResetPtr
     str     r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
 
-DS_CH1_CMD_SetSpeed:
+DS_CH\()\ch\()_CMD_SetSpeed :
     align_word  r1,r7
     ldrh    r0,[r1]
     adds    r1,1
     ldr     r2,=DS_MusicSpeed
     strh    r0,[r2]
-    b       DS_CH1_GetByte
+    b       DS_CH\()\ch\()_GetByte
 
-DS_CH1_CMD_End:
+DS_CH\()\ch\()_CMD_End :
     ldr     r1,=DS_MusicFlags
     ldrh    r0,[r1]
-    ldr     r2,=0b1111111100111110
+    ldr     r2,=0b1111111100111111-(1<<\ch)
     ands    r0,r2
     strh    r0,[r1]
     pop     {pc}
 
-DS_CH1_DoneUpdating:
-    ldr     r2,=DS_CH1_SeqPtr
+DS_CH\()\ch\()_DoneUpdating :
+    ldr     r2,=DS_CH\()\ch\()_SeqPtr
     str     r1,[r2]
-DS_CH1_Done:
+DS_CH\()\ch\()_Done :
     pop     {pc}
+    .endm
 
 @ ================================================================================
 
-DS_UpdateCH2:
-    bx      lr
-    
-DS_UpdateCH3:
-    bx      lr
-    
-DS_UpdateCH4:
-    bx      lr
+    DS_UpdateChannel 1
+    DS_UpdateChannel 2
+    @DS_UpdateChannel 3
+    @DS_UpdateChannel 4
     
 @ INPUT:    r7 = channel ID
 DS_UpdateChannelDDMA:
@@ -1436,9 +1497,11 @@ DS_ClearMem:
 @ OUTPUT:   r7 = frequency
 @ DESTROYS: r0, r2, r3, r7
 DS_GetNoteFrequencyDMG:
+    push    {r0,r2}
     ldr     r2,=DS_FreqTable
     adds    r0,r0
     ldrh    r7,[r2,r0]
+    pop     {r0,r2}
     bx      lr
 
 @ INPUT:    r2 = wave pointer
@@ -1591,8 +1654,10 @@ DS_Test_CH1:
     sound_slide_down 0
     note nC_,5,12
     sound_toggle_monty
-    sound_slide_down 4
+    sound_slide_down 2
     wait 12
+    sound_toggle_monty
+    sound_slide_down 0
     rest 1
     sound_end
 
