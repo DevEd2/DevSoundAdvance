@@ -827,10 +827,7 @@ DS_CH1_PitchSlideUp:
 DS_CH1_PitchSlideDown:
     ldr     r1,=DS_CH1_SlideSpeed
     ldrb    r0,[r1]
-    @ negate r0
-    ldr     r7,=-1
-    eors    r0,r7
-    adds    r0,1
+    negs    r0,r0
     @ fall through
 DS_CH1_DoSlide:
     ldr     r1,=DS_CH1_SlideOffset
