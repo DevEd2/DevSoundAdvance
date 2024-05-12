@@ -733,7 +733,7 @@ DS_UpdateMusic:
     strh    r0,[r1]
     
     bl      DS_UpdateCH1
-@   bl      DS_UpdateCH2
+    bl      DS_UpdateCH2
     
     pop     {pc}
 
@@ -812,7 +812,7 @@ DS_CH1_PortaStop:
     ldrb    r0,[r1]
     movs    r2,PITCH_BIT_MASK
     ands    r0,r2
-    strb    r0,[r2]    
+    strb    r0,[r1]    
     ldr     r1,=DS_CH1_SlideOffset
     movs    r0,0
     strh    r0,[r1]
@@ -1006,8 +1006,103 @@ DS_UpdateRegisters:
     adds    r7,r2
 10: ldr     r1,=REG_SOUND1CNT_X
     strh    r7,[r1]
-2:  pop     {pc}
+2:  
 
+
+    @ DMG pulse 2
+    @ volume
+    ldr     r1,=DS_CH2_Volume
+    ldr     r2,=DS_CH2_OldVolume
+    ldrb    r0,[r1]
+    ldrb    r4,[r2]
+    strb    r0,[r2]
+    cmp     r0,r4
+    beq     1f
+    lsls    r0,4
+    ldr     r1,=REG_NR22
+    strb    r0,[r1]
+    ldr     r0,=0x8000
+    ldr     r2,=REG_SOUND2CNT_H
+    strh    r0,[r2]
+1:  ldr     r1,=DS_CH2_Note
+    ldrb    r0,[r1]
+    cmp     r0,0x7D
+    bcs     2f
+    @ pulse
+    ldr     r1,=DS_CH2_Pulse
+    ldr     r2,=REG_NR21
+    ldrb    r0,[r1]
+    lsls    r0,6
+    strb    r0,[r2]
+    @ note + transpose + arpeggio
+    ldr     r3,=DS_CH2_ArpTranspose
+    ldrb    r0,[r3]
+    cmp     r0,0x40
+    bcs     3f
+    @ check if echo should be applied (bit 7 of volume)
+    ldr     r1,=DS_CH2_Volume
+    ldrb    r0,[r1]
+    cmp     r0,0x80
+    bcs     6f
+    ldr     r1,=DS_CH2_Note
+    b       7f
+6:  ldr     r1,=DS_CH2_EchoBuffer
+    ldr     r2,=DS_CH2_EchoPos
+    ldrb    r0,[r2]
+    subs    r0,2
+    movs    r4,3
+    ands    r0,r4
+    ldrb    r0,[r1,r0]
+    ldr     r2,=DS_CH2_Transpose
+    b       8f
+7:  ldr     r2,=DS_CH2_Transpose
+    ldrb    r0,[r1]
+8:  ldrb    r2,[r2]
+    ldrb    r3,[r3]
+    adds    r0,r2    
+    adds    r0,r3
+    b       5f
+3:  cmp     r0,0x80
+    bpl     4f
+    ldr     r1,=DS_CH2_Note
+    ldr     r2,=DS_CH2_Transpose
+    ldrb    r0,[r1]
+    ldrb    r2,[r2]
+    ldrb    r3,[r3]
+    adds    r0,r2    
+    subs    r3,0x40
+    subs    r0,r3
+    b       5f
+4:  subs    r0,0x80
+    @ fall through
+5:  bl      DS_GetNoteFrequencyDMG
+    @ note pitch + pitch table offset + note slide offset
+    ldr     r1,=DS_CH2_VibOffset
+    ldrh    r1,[r1]
+    adds    r7,r1
+    @ should we apply monty mode?
+    ldr     r1,=DS_CH2_PitchMode
+    ldrb    r0,[r1]
+    movs    r6,PITCH_BIT_MASK
+    ands    r0,r6
+    movs    r6,1 << PITCH_BIT_MONTY
+    cmp     r0,r6
+    bne     11f
+    ldr     r1,=DS_GlobalTick
+    ldrb    r0,[r1]
+    movs    r6,1
+    ands    r0,r6
+    bne     10f
+11: 
+    ldr     r2,=DS_CH2_SlideOffset
+    ldrh    r2,[r2]
+    adds    r7,r2
+10: ldr     r1,=REG_SOUND2CNT_H
+    strh    r7,[r1]
+2:  
+
+    pop     {pc}
+    
 @ ======================================================================
 
     .macro DS_UpdateChannel ch
@@ -1341,6 +1436,7 @@ DS_CH\()\ch\()_CMD_Loop:
     cmp     r0,0
     bne     DS_CH\()\ch\()_CMD_Jump
     align_word  r1,r7
+    adds    r1,4
     b       DS_CH\()\ch\()_GetByte
 
 DS_CH\()\ch\()_CMD_Call:
@@ -1510,6 +1606,8 @@ DS_CH\()\ch\()_Done:
     DS_UpdateChannel 2
     DS_UpdateChannel 3
     DS_UpdateChannel 4
+
+.pool
     
 @ INPUT:    r7 = channel ID
 DS_UpdateChannelDDMA:
@@ -1613,6 +1711,24 @@ DSX_NoiseTable:
     .byte   0x17,0x16,0x15,0x14
     .byte   0x07,0x06,0x05,0x04
     .byte   0x03,0x02,0x01,0x00
+
+DS_VolScaleTable:
+    .byte    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    .byte    0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
+    .byte    0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2
+    .byte    0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3
+    .byte    0, 0, 1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 4, 4, 4
+    .byte    0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 4, 4, 4, 5, 5, 5
+    .byte    0, 0, 1, 1, 2, 2, 3, 3, 3, 4, 4, 5, 5, 5, 6, 6
+    .byte    0, 0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6, 7, 7
+    .byte    0, 1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 7, 8, 8
+    .byte    0, 1, 1, 2, 2, 3, 4, 4, 5, 6, 6, 7, 7, 8, 9, 9
+    .byte    0, 1, 1, 2, 3, 3, 4, 5, 5, 6, 7, 7, 8, 9, 9,10
+    .byte    0, 1, 1, 2, 3, 4, 4, 5, 6, 7, 7, 8, 9,10,10,11
+    .byte    0, 1, 2, 2, 3, 4, 5, 6, 6, 7, 8, 9,10,10,11,12
+    .byte    0, 1, 2, 3, 3, 4, 5, 6, 7, 8, 9,10,10,11,12,13
+    .byte    0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9,10,11,12,13,14
+    .byte    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15	
 
     .pool   @ ugh
 

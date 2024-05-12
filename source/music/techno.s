@@ -232,7 +232,7 @@ Vib_Lead2:
 
 Mus_Techno_CH1:
     sound_instrument Ins_PulseEcho2
-@    rest 128
+    rest 128
 0:
     sound_call 3f
     sound_loop 9,0b
@@ -288,7 +288,7 @@ Mus_Techno_CH1:
 @ ----------------
 
 Mus_Techno_CH2:
-@    rest 128
+    rest 128
 0:
     sound_instrument Ins_Arp1
     sound_volume 15
