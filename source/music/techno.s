@@ -3,8 +3,8 @@
 Mus_Techno:
     .hword  0   @ mode 0 - DMG only
     .byte   7,7 @ song speed 7/7
-    .word Mus_Techno_CH2
     .word Mus_Techno_CH1
+    .word Mus_Techno_CH2
     .word Mus_Techno_CH3
     .word Mus_Techno_CH4
     .word DS_DummyChannel
@@ -73,7 +73,7 @@ Vol_Lead1R:
 Vol_Lead2R:
     .byte 7,7,6,6,5,5,5,4,4,4,3,seq_wait,3,2,seq_wait,4,1,seq_end
 Vol_WaveBass2:
-    .byte 0x20,0x20,0x40,seq_end
+    .byte 15,12,8,seq_end
 Vol_PulseEcho2:
     .byte 6,seq_end
 Vol_PulseEcho2R:
@@ -233,11 +233,9 @@ Vib_Lead2:
 Mus_Techno_CH1:
     sound_instrument Ins_PulseEcho2
     rest 128
-0:
-    sound_call 3f
+0:  sound_call 3f
     sound_loop 9,0b
-1:
-    sound_call 3f
+1:  sound_call 3f
     sound_call 3f
     sound_transpose 2
     sound_call 3f
@@ -245,13 +243,11 @@ Mus_Techno_CH1:
     sound_reset_transpose
     sound_loop 1,1b
     rest 128
-2:
-    sound_call 3f
+2:  sound_call 3f
     sound_loop 3,2b
     sound_jump 0b
 
-3:
-    note nC_,5,1
+3:  note nC_,5,1
     release 1
     note nC_,4,1
     release 1
@@ -289,8 +285,7 @@ Mus_Techno_CH1:
 
 Mus_Techno_CH2:
     rest 128
-0:
-    sound_instrument Ins_Arp1
+0:  sound_instrument Ins_Arp1
     sound_volume 15
     sound_call 2f
     sound_call 2f
@@ -304,8 +299,7 @@ Mus_Techno_CH2:
     rest 128
     sound_instrument Ins_Lead1
     sound_volume 10
-1:
-    note nB_,3,0
+1:  note nB_,3,0
     sound_portamento 2
     note nC_,4,32
     note nC_,4,0
@@ -322,8 +316,7 @@ Mus_Techno_CH2:
     note nD_,4,16
     sound_loop 1,1b
     sound_jump 0b
-2:
-    sound_set_arp_ptr Arp_1_037
+2:  sound_set_arp_ptr Arp_1_037
     rest 2
     note nC_,5,2
     note nC_,5,3
@@ -341,8 +334,7 @@ Mus_Techno_CH2:
     sound_set_arp_ptr Arp_1_037
     note nC_,5,2
     sound_ret
-3:
-    sound_set_arp_ptr Arp_1_047
+3:  sound_set_arp_ptr Arp_1_047 
     wait 2
     note nAs,4,2
     note nAs,4,3
@@ -378,8 +370,8 @@ Mus_Techno_CH2:
 Mus_Techno_CH3:
     sound_instrument Ins_WaveBass2
 1:
-@    sound_call 13f
-@    sound_loop 7,1b
+    sound_call 13f
+    sound_loop 7,1b
 2:
     sound_call 13f
     sound_loop 3,2b

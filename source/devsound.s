@@ -55,6 +55,8 @@
     .error "Sound buffer size must be a multiple of 16 bytes! Sample rate should be changed to compensate."
     .endif
     
+    MINMOD_NUM_CHANNELS = 12
+    
 @ =============================================================================
 @ Equates
 @ =============================================================================
@@ -120,7 +122,7 @@
     .equ    REG_NR23,       0x0400006C
     .equ    REG_NR24,       0x0400006D
     .equ    REG_NR30,       0x04000070
-    .equ    REG_NR31,       0x04000072
+    .equ    REG_NR31,       0x04000071
     .equ    REG_NR32,       0x04000073
     .equ    REG_NR33,       0x04000074
     .equ    REG_NR34,       0x04000075
@@ -191,6 +193,14 @@
     .equ    DMG_SOUND2_R,   1 << 13
     .equ    DMG_SOUND3_R,   1 << 14
     .equ    DMG_SOUND4_R,   1 << 15
+    
+    .equ    WAVE_BANK_0,    1 << 6
+    .equ    WAVE_BANK_1,    0 << 6
+    .equ    WAVE_ENABLE,    1 << 7
+    .equ    WAVE_DISABLE,   0 << 7
+    .equ    WAVE_32,        0 << 5
+    .equ    WAVE_64,        1 << 5
+    .equ    WAVE_ENABLE_MASK, 0b01100000
     
     .equ    DMG_VOL_LR_77,  0x77
     
@@ -467,7 +477,7 @@ DS_Thumbprint:
 @ =============================================================================
 
     .global DS_Init
-    .type DS_Init STT_FUNC   
+    .type DS_Init STT_FUNC
 DS_Init:
     push    {r0-r12, lr}
 
@@ -482,24 +492,6 @@ DS_Init:
     str     r4,[r5]
 
     bl      DS_ClearMem
-    
-    @ init ch3 wave
-    mov     r0,0
-    ldr     r1,=REG_SOUND3CNT_L
-    strh    r0,[r1]
-    ldr     r2,=DS_DefaultWave
-    ldr     r3,=REG_WAVE_RAM
-    mov     r4,4
-.waveloop:
-    ldr     r0,[r2]
-    str     r0,[r3]
-    add     r2,4
-    add     r3,4
-    sub     r4,1
-    cmp     r4,0
-    bne     .waveloop
-    mov     r0,0b10000000
-    strh    r0,[r1]
     
     @ init tables
     ldr     r0,=DS_DummyTable
@@ -598,6 +590,25 @@ DS_Init:
     str     r0,[r1]
     str     r0,[r2]
     str     r0,[r3]
+
+    ldr     r0,=DS_DummyTable
+    ldr     r1,=DS_MMRAM
+    mov     r12,MINMOD_NUM_CHANNELS
+1:  push    {r1}
+    str     r0,[r1,MM_VolPtr]
+    str     r0,[r1,MM_VolResetPtr]
+    str     r0,[r1,MM_VolReleasePtr]
+    str     r0,[r1,MM_ArpPtr]
+    str     r0,[r1,MM_ArpResetPtr]
+    str     r0,[r1,MM_ArpReleasePtr]
+    str     r0,[r1,MM_PitchPtr]
+    str     r0,[r1,MM_PitchResetPtr]
+    str     r0,[r1,MM_PitchReleasePtr]
+    pop     {r1}
+    add     r1,MINMOD_STRUCT_SIZE
+    sub     r12,1
+    cmp     r12,0
+    bne     1b
 
     @ init timer
     
@@ -734,6 +745,7 @@ DS_UpdateMusic:
     
     bl      DS_UpdateCH1
     bl      DS_UpdateCH2
+    bl      DS_UpdateCH3
     
     pop     {pc}
 
@@ -764,7 +776,6 @@ DS_CH1_Portamento:
     bmi     DS_CH1_PortaDown
     b       DS_CH1_PortaStop
 DS_CH1_PortaUp:
-    brk
     ldr     r1,=DS_CH1_SlideOffset
     ldrh    r2,[r1]
     ldr     r3,=DS_CH1_SlideSpeed
@@ -784,7 +795,6 @@ DS_CH1_PortaUp:
     bhs     DS_CH1_PortaStop
     b       DS_CH1_PortaDone
 DS_CH1_PortaDown:
-    brk
     ldr     r1,=DS_CH1_SlideOffset
     ldrh    r2,[r1]
     ldr     r3,=DS_CH1_SlideSpeed
@@ -857,7 +867,10 @@ DS_UpdateTables:
     ldr     r3,=DS_CH1_Pulse
     ldr     r4,=DS_CH1_PulseDelay
     bl      DS_UpdateTableSingle
-    
+    ldr     r2,=DS_CH1_PitchPtr
+    ldr     r3,=DS_CH1_VibOffset
+    ldr     r4,=DS_CH1_PitchDelay
+    bl      DS_UpdatePitchTable
 2:  @ pulse 2 tables
     ldr     r2,=DS_CH2_VolPtr
     ldr     r3,=DS_CH2_Volume
@@ -871,8 +884,43 @@ DS_UpdateTables:
     ldr     r3,=DS_CH2_Pulse
     ldr     r4,=DS_CH2_PulseDelay
     bl      DS_UpdateTableSingle
-3:    
+    ldr     r2,=DS_CH2_PitchPtr
+    ldr     r3,=DS_CH2_VibOffset
+    ldr     r4,=DS_CH2_PitchDelay
+    bl      DS_UpdatePitchTable
+3:  @ wave tables
+    ldr     r2,=DS_CH3_VolPtr
+    ldr     r3,=DS_CH3_Volume
+    ldr     r4,=DS_CH3_VolDelay
+    bl      DS_UpdateTableSingle
+    ldr     r2,=DS_CH3_ArpPtr
+    ldr     r3,=DS_CH3_ArpTranspose
+    ldr     r4,=DS_CH3_ArpDelay
+    bl      DS_UpdateTableSingle
+    ldr     r2,=DS_CH3_WavePtr
+    ldr     r3,=DS_CH3_Wave
+    ldr     r4,=DS_CH3_WaveDelay
+    bl      DS_UpdateTableSingle
+    ldr     r2,=DS_CH3_PitchPtr
+    ldr     r3,=DS_CH3_VibOffset
+    ldr     r4,=DS_CH3_PitchDelay
+    bl      DS_UpdatePitchTable
+4:  @ noise tables
+    ldr     r2,=DS_CH4_VolPtr
+    ldr     r3,=DS_CH4_Volume
+    ldr     r4,=DS_CH4_VolDelay
+    bl      DS_UpdateTableSingle
+    ldr     r2,=DS_CH4_ArpPtr
+    ldr     r3,=DS_CH4_ArpTranspose
+    ldr     r4,=DS_CH4_ArpDelay
+    bl      DS_UpdateTableSingle
+    ldr     r2,=DS_CH4_ModePtr
+    ldr     r3,=DS_CH4_Mode
+    ldr     r4,=DS_CH4_ModeDelay
+    bl      DS_UpdateTableSingle
     pop     {pc}
+
+    .pool @ try to write thumb assembly without having to put these everywhere challenge (impossible)
 
 @ INPUT:    r2 = pointer to table pointer
 @           r3 = pointer to value table modulates
@@ -909,6 +957,39 @@ DS_TableWait:
     strb    r0,[r4]
     @ fall through
 DS_TableDone:
+    str     r5,[r2]
+    bx      lr
+
+@ INPUT:    r2 = pointer to table pointer
+@           r3 = pointer to value table modulates
+@           r4 = pointer to table delay
+DS_UpdatePitchTable:
+    bx      lr
+
+    ldr     r5,[r2]
+    @ process delay
+    ldrb    r0,[r4]
+    cmp     r0,0
+    beq     1f
+    subs    r0,1
+    strb    r0,[r4]
+    bx      lr
+1:  @ get byte from table
+    ldrb    r0,[r5]
+    adds    r5,1
+    cmp     r0,pitch_end
+    bne     2f
+    bx      lr
+2:  cmp     r0,pitch_loop
+    beq     DS_PitchTableLoop
+    @ default case: write to modulation value
+    strb    r0,[r3]
+    b       DS_TableDone
+DS_PitchTableLoop:
+    align_word r5,r6
+    ldr     r5,[r5]
+    b       1b
+DS_PitchTableDone:
     str     r5,[r2]
     bx      lr
 
@@ -1101,6 +1182,101 @@ DS_UpdateRegisters:
     strh    r7,[r1]
 2:  
 
+    @ volume
+    ldr     r1,=DS_CH3_Volume
+    ldrb    r0,[r1]
+    movs    r2,0xF
+    ands    r0,r2
+    ldr     r1,=DS_WaveVolTable
+    ldrb    r0,[r1,r0]
+    ldr     r1,=REG_NR32
+    strb    r0,[r1]
+    
+    ldr     r1,=DS_CH3_Note
+    ldrb    r0,[r1]
+    cmp     r0,0x7D
+    bcs     2f
+    @ wave
+    ldr     r2,=DS_CH3_OldWave
+    ldrb    r0,[r2]
+    ldr     r1,=DS_CH3_Wave
+    ldrb    r1,[r1]
+    cmp     r0,r1
+    beq     1f
+    strb    r1,[r2]
+    movs    r0,r1
+    ldr     r2,=DS_Waves
+    movs    r3,16
+    muls    r0,r3
+    adds    r2,r0
+    bl      DS_LoadWave
+1:  @ note + transpose + arpeggio
+    ldr     r3,=DS_CH3_ArpTranspose
+    ldrb    r0,[r3]
+    cmp     r0,0x40
+    bcs     3f
+    @ check if echo should be applied (bit 7 of volume)
+    ldr     r1,=DS_CH3_Volume
+    ldrb    r0,[r1]
+    cmp     r0,0x80
+    bcs     6f
+    ldr     r1,=DS_CH3_Note
+    b       7f
+6:  ldr     r1,=DS_CH3_EchoBuffer
+    ldr     r2,=DS_CH3_EchoPos
+    ldrb    r0,[r2]
+    subs    r0,2
+    movs    r4,3
+    ands    r0,r4
+    ldrb    r0,[r1,r0]
+    ldr     r2,=DS_CH3_Transpose
+    b       8f
+7:  ldr     r2,=DS_CH3_Transpose
+    ldrb    r0,[r1]
+8:  ldrb    r2,[r2]
+    ldrb    r3,[r3]
+    adds    r0,r2    
+    adds    r0,r3
+    b       5f
+3:  cmp     r0,0x80
+    bpl     4f
+    ldr     r1,=DS_CH3_Note
+    ldr     r2,=DS_CH3_Transpose
+    ldrb    r0,[r1]
+    ldrb    r2,[r2]
+    ldrb    r3,[r3]
+    adds    r0,r2    
+    subs    r3,0x40
+    subs    r0,r3
+    b       5f
+4:  subs    r0,0x80
+    @ fall through
+5:  bl      DS_GetNoteFrequencyDMG
+    @ note pitch + pitch table offset + note slide offset
+    ldr     r1,=DS_CH3_VibOffset
+    ldrh    r1,[r1]
+    adds    r7,r1
+    @ should we apply monty mode?
+    ldr     r1,=DS_CH3_PitchMode
+    ldrb    r0,[r1]
+    movs    r6,PITCH_BIT_MASK
+    ands    r0,r6
+    movs    r6,1 << PITCH_BIT_MONTY
+    cmp     r0,r6
+    bne     11f
+    ldr     r1,=DS_GlobalTick
+    ldrb    r0,[r1]
+    movs    r6,1
+    ands    r0,r6
+    bne     10f
+11: 
+    ldr     r2,=DS_CH3_SlideOffset
+    ldrh    r2,[r2]
+    adds    r7,r2
+10: ldr     r1,=REG_SOUND3CNT_X
+    strh    r7,[r1]
+2:
+
     pop     {pc}
     
 @ ======================================================================
@@ -1136,8 +1312,20 @@ DS_CH\()\ch\()_GetByte:
     cmp     r0,0x7d
     beq     DS_CH\()\ch\()_Release
     @ default case: note
+    .if \ch != 4
+    ldr     r3,=DS_CH\()\ch\()_PitchMode
+    ldrb    r3,[r3]
+    movs    r4,PITCH_MODE_MASK
+    ands    r3,r4
+    ldr     r2,=DS_CH\()\ch\()_Note
+    cmp     r3,PITCH_MODE_PORTAMENTO
+    bne     7f
+    ldr     r2,=DS_CH\()\ch\()_NoteTarget
+7:  strb    r0,[r2]
+    .else
     ldr     r2,=DS_CH\()\ch\()_Note
     strb    r0,[r2]
+    .endc
     @ echo buffer processing
     ldr     r2,=DS_CH\()\ch\()_FirstNote
     ldrb    r3,[r2]
@@ -1199,8 +1387,13 @@ DS_CH\()\ch\()_GetByte:
     @ reset pitch table
     ldr     r2,=DS_CH\()\ch\()_PitchResetPtr
     ldr     r0,[r2]
-    ldr     r2,=DS_CH\()\ch\()_PitchPtr
-    str     r0,[r2]
+    ldrb    r7,[r2]
+    ldr     r2,=DS_CH\()\ch\()_PitchDelay
+    strb    r7,[r2]
+    adds    r2,1
+    ldr     r3,=DS_CH\()\ch\()_PitchPtr
+    str     r2,[r3]
+    @ cut note slide
     ldr     r2,=DS_CH\()\ch\()_PitchMode
     ldrb    r0,[r2]
     movs    r3,PITCH_MODE_MASK
@@ -1428,7 +1621,7 @@ DS_CH\()\ch\()_CMD_Loop:
     ldrb    r3,[r2]
     cmp     r3,0
     bne     1f
-    adds    r0,1
+    @adds    r0,1
     strb    r0,[r2]
 1:  ldrb    r0,[r2]
     subs    r0,1
@@ -1651,27 +1844,33 @@ DS_GetNoteFrequencyDMG:
     ldrh    r7,[r2,r0]
     pop     {r0,r2}
     bx      lr
-
+    
 @ INPUT:    r2 = wave pointer
 @ OUTPUT:   none
 @ DESTROYS: none
 DS_LoadWave:
-    push    {r0-r4,lr}
+    push    {r0-r3,lr}
+    ldr     r1,=REG_WAVE_RAM
+    ldr     r0,[r2,0]
+    str     r0,[r1,0]
+    ldr     r0,[r2,4]
+    str     r0,[r1,4]
+    ldr     r0,[r2,8]
+    str     r0,[r1,8]
+    ldr     r0,[r2,12]
+    str     r0,[r1,12]
+    ldr     r1,=REG_NR30
+    ldrb    r3,[r1]
     movs    r0,0
-    ldr     r1,=REG_SOUND3CNT_L
-    strh    r0,[r1]
-    ldr     r3,=REG_WAVE_RAM
-    movs    r4,4
-1:  ldr     r0,[r2]
-    str     r0,[r3]
-    adds    r2,4
-    adds    r2,4
-    subs    r4,1
-    cmp     r4,0
-    bne     1b
-    movs    r0,0b10000000
-    strh    r0,[r1]
-    pop     {r0-r4,pc}
+    strb    r0,[r1]
+    movs    r0,WAVE_BANK_0
+    eors    r3,r0
+    adds    r3,WAVE_ENABLE
+    strb    r3,[r1]
+    ldr     r1,=REG_NR34
+    movs    r0,0x80
+    strb    r0,[r1]
+    pop     {r0-r3,pc}
 
 @ =============================================================================
 
@@ -1730,8 +1929,27 @@ DS_VolScaleTable:
     .byte    0, 1, 2, 3, 4, 5, 6, 7, 7, 8, 9,10,11,12,13,14
     .byte    0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15	
 
+    .align  1
+DS_WaveVolTable:
+    .byte   0x00
+    .byte   0x20
+    .byte   0x20
+    .byte   0x20
+    .byte   0x20
+    .byte   0x20
+    .byte   0x40
+    .byte   0x40
+    .byte   0x40
+    .byte   0x40
+    .byte   0x80
+    .byte   0x80
+    .byte   0x80
+    .byte   0x60
+    .byte   0x60
+    .byte   0x60
+    
     .pool   @ ugh
-
+    
 @ =============================================================================
     
     .align  4
@@ -1858,28 +2076,11 @@ DS_CH1_EchoBuffer:      .word   0
 DS_CH2_EchoBuffer:      .word   0
 DS_CH3_EchoBuffer:      .word   0
 DS_CH4_EchoBuffer:      .word   0
-DS_MM1_EchoBuffer:      .word   0
-DS_MM2_EchoBuffer:      .word   0
-DS_MM3_EchoBuffer:      .word   0
-DS_MM4_EchoBuffer:      .word   0
-DS_MM5_EchoBuffer:      .word   0
-DS_MM6_EchoBuffer:      .word   0
-DS_MM7_EchoBuffer:      .word   0
-DS_MM8_EchoBuffer:      .word   0
-
 
 DS_CH1_SeqPtr:          .word   0
 DS_CH2_SeqPtr:          .word   0
 DS_CH3_SeqPtr:          .word   0
 DS_CH4_SeqPtr:          .word   0
-DS_MM1_SeqPtr:          .word   0
-DS_MM2_SeqPtr:          .word   0
-DS_MM3_SeqPtr:          .word   0
-DS_MM4_SeqPtr:          .word   0
-DS_MM5_SeqPtr:          .word   0
-DS_MM6_SeqPtr:          .word   0
-DS_MM7_SeqPtr:          .word   0
-DS_MM8_SeqPtr:          .word   0
 
 DS_CH1_ReturnPtr:       .word   0
 DS_CH1_VolPtr:          .word   0
@@ -1918,8 +2119,6 @@ DS_CH1_FirstNote:       .byte   0
 DS_CH1_Pulse:           .byte   0
 DS_CH1_Volume:          .byte   0
 DS_CH1_OldVolume:       .byte   0
-    .align  1
-DS_CH1_Pitch:           .hword  0
 
     .align  2
 DS_CH2_ReturnPtr:       .word   0
@@ -1958,8 +2157,6 @@ DS_CH2_FirstNote:       .byte   0
 DS_CH2_Pulse:           .byte   0
 DS_CH2_Volume:          .byte   0
 DS_CH2_OldVolume:       .byte   0
-    .align  1
-DS_CH2_Pitch:           .hword  0
 
     .align  2
 DS_CH3_ReturnPtr:       .word   0
@@ -2001,8 +2198,7 @@ DS_CH3_FirstNote:       .byte   0
 DS_CH3_Wave:            .byte   0
 DS_CH3_OldWave:         .byte   0
 DS_CH3_Volume:          .byte   0
-    .align  1
-DS_CH3_Pitch:           .hword  0
+DS_CH3_WaveBank:        .byte   0
 
     .align  2
 DS_CH4_ReturnPtr:       .word   0
@@ -2034,6 +2230,47 @@ DS_CH4_Mode:            .byte   0
 DS_CH4_Volume:          .byte   0
 DS_CH4_OldVolume:       .byte   0
 
+.equ MM_SeqPtr,              0
+.equ MM_ReturnPtr,           4
+.equ MM_EchoBuffer,          8
+.equ MM_VolPtr,              12
+.equ MM_ArpPtr,              16
+.equ MM_SamplePtr,           20
+.equ MM_PitchPtr,            24
+.equ MM_VolResetPtr,         28
+.equ MM_ArpResetPtr,         32
+.equ MM_SampleResetPtr,      36
+.equ MM_PitchResetPtr,       40
+.equ MM_VolReleasePtr,       44
+.equ MM_ArpReleasePtr,       48
+.equ MM_SampleReleasePtr,    52
+.equ MM_PitchReleasePtr,     56
+.equ MM_LoopCount,           60
+.equ MM_VolDelay,            61
+.equ MM_ArpDelay,            62
+.equ MM_PulseDelay,          63
+.equ MM_PitchDelay,          64
+.equ MM_Tick,                65
+.equ MM_Note,                66
+.equ MM_Timer,               67
+.equ MM_ArpTranspose,        68
+.equ MM_PitchMode,           69
+.equ MM_VibOffset,           70
+.equ MM_SlideOffset,         72
+.equ MM_SlideTarget,         74
+.equ MM_SlideSpeed,          76
+.equ MM_NoteTarget,          78
+.equ MM_Transpose,           79
+.equ MM_ChannelVol,          80
+.equ MM_EchoPos,             81
+.equ MM_FirstNote,           82
+.equ MM_Volume,              83
+.equ MM_SampleLoopPtr,       84
+MINMOD_STRUCT_SIZE = 96 @ ideally should be a multiple of 4
+
+DS_MMRAM:
+    .space  128 * MINMOD_NUM_CHANNELS
+    
 DS_AudioBuffer1:        .space  BUFFER_SIZE
 DS_AudioBuffer2:        .space  BUFFER_SIZE
 
